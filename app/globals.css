@@ -84,6 +84,7 @@
 .dark-theme .stats>button:hover{background:#2b2036}
 .dark-theme .stats strong small,.dark-theme .stats div>span,.dark-theme .card-heading p,.dark-theme .empty p,.dark-theme .item p,.dark-theme .item small,.dark-theme .platform p,.dark-theme .platform>small{color:var(--muted)}
 .dark-theme .text-button{color:#d1a9ec}
+.platform-icon svg{width:25px;height:25px}.platform .platform-connect{width:100%;margin-top:19px;font-size:11px}.platform button svg,.platform-connect svg{width:17px;height:17px}.twitch-connect{background:#9146ff!important;border-color:#9146ff!important;color:white!important}.twitch-connect:hover{background:#7b35df!important}.status.connected{background:#e7f3ed;border-color:#c8e5d5;color:#4c8265}.dark-theme .status.connected{background:#213b31;border-color:#315b48;color:#9bd0b2}.platform .disconnect{color:var(--muted)}
 .dark-theme .lavender{background:#3d2c4d;color:#d2b4ec}
 .dark-theme .mint{background:#233a34;color:#8cc9aa}
 .dark-theme .peach{background:#463226;color:#e6aa79}
