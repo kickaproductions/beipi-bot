@@ -48,19 +48,22 @@
 .theme-toggle{min-width:96px;justify-content:center}
 .shell{transition:background-color .2s,color .2s}
 .dark-theme{
-  --ink:#f7f1fa;
-  --muted:#bdb0c7;
+  --ink:#fbf7fd;
+  --muted:#d0c4d7;
   --purple:#b99ae6;
   --line:#443651;
   --bg:#17121f;
   --light:#332541;
   color-scheme:dark;
+  color:var(--ink);
   background:var(--bg);
 }
 .dark-theme .sidebar{background:#21182c;border-color:var(--line)}
 .dark-theme .topbar{background:#1c1525f2;border-color:var(--line)}
 .dark-theme .workspace,.dark-theme .quiet{background:#291e35;border-color:var(--line)}
+.dark-theme .quiet{color:#d7c9df}
 .dark-theme .workspace-icon,.dark-theme .avatar{background:#3b2a4c;color:#d0b8e3}
+.dark-theme .workspace>svg,.dark-theme .nav-label,.dark-theme .crumb{color:#c8bad1}
 .dark-theme nav button{color:#c5b8cf}
 .dark-theme nav button.active{background:#3a294b;color:#e2c9f5}
 .dark-theme nav button:hover{background:#30223d}
@@ -73,11 +76,14 @@
 .dark-theme .hero{background:#2b2037;border-color:#49375a}
 .dark-theme .hero:after{background:#39294a}
 .dark-theme .hero p{color:#c5b2d0}
+.dark-theme .hero h2,.dark-theme .page-heading h1,.dark-theme .card h2,.dark-theme .stats strong,.dark-theme .empty h3,.dark-theme .workspace strong,.dark-theme .profile strong{color:var(--ink)}
 .dark-theme .pill{background:#3b2b49;color:#d8bce9}
 .dark-theme .hero-button,.dark-theme .outline{background:#3a2a49;border-color:#594468;color:#eadcf4}
 .dark-theme .hero-button:hover,.dark-theme .outline:hover{background:#453255}
 .dark-theme .stats>button,.dark-theme .card{background:#241a2e;border-color:var(--line)}
 .dark-theme .stats>button:hover{background:#2b2036}
+.dark-theme .stats strong small,.dark-theme .stats div>span,.dark-theme .card-heading p,.dark-theme .empty p,.dark-theme .item p,.dark-theme .item small,.dark-theme .platform p,.dark-theme .platform>small{color:var(--muted)}
+.dark-theme .text-button{color:#d1a9ec}
 .dark-theme .lavender{background:#3d2c4d;color:#d2b4ec}
 .dark-theme .mint{background:#233a34;color:#8cc9aa}
 .dark-theme .peach{background:#463226;color:#e6aa79}
