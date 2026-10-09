@@ -147,3 +147,10 @@
 .account-settings{padding:25px}.account-intro{display:flex;align-items:center;gap:14px;padding-bottom:24px}.account-intro h2{font-size:20px;font-weight:500}.account-intro p,.setting-row p{font-size:11px;color:var(--muted);margin-top:5px}.account-avatar{width:48px;height:48px;font-size:16px}.setting-row{display:flex;align-items:center;justify-content:space-between;gap:20px;border-top:1px solid var(--line);padding:22px 0}.setting-row strong{font-size:13px;font-weight:500}.setting-row .outline{display:flex;gap:8px}.status-inline{font-size:9px;color:var(--muted);border:1px solid var(--line);border-radius:20px;padding:6px 9px;white-space:nowrap}
 @media(max-width:650px){.theme-toggle{min-width:auto}.theme-toggle span{display:none}.topbar-actions{gap:6px}}
 @media(max-width:650px){.card-heading-actions{align-items:flex-end}.card-heading-actions .text-button{font-size:9px}.setting-row{align-items:flex-start;flex-direction:column}.setting-row .outline{width:100%}}
+
+.discord-connect-notice{align-items:center}
+.discord-connect-notice>div{flex:1}
+.discord-add{margin-left:auto;text-decoration:none}
+.discord-add svg:last-child{opacity:.7}
+@media(max-width:750px){.discord-connect-notice{flex-wrap:wrap}.discord-add{margin-left:33px}}
+@media(max-width:500px){.discord-add{width:calc(100% - 33px)}}
