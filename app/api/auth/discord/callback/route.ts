@@ -7,7 +7,7 @@ type TokenResponse={access_token?:string;refresh_token?:string;expires_in?:numbe
 type UserResponse={id:string;username:string;global_name?:string|null;avatar?:string|null};
 
 export async function GET(request:NextRequest){
-  const home=new URL('/',request.nextUrl.origin);
+  const home=new URL('/dashboard',request.nextUrl.origin);
   const code=request.nextUrl.searchParams.get('code');
   const state=request.nextUrl.searchParams.get('state');
   const expected=request.cookies.get(DISCORD_STATE_COOKIE)?.value;

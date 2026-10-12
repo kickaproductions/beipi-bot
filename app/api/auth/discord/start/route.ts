@@ -23,6 +23,6 @@ export async function GET(request:NextRequest){
     response.cookies.set(DISCORD_STATE_COOKIE,state,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:600});
     return response;
   }catch{
-    return NextResponse.redirect(new URL('/?discord=not-configured',process.env.NEXT_PUBLIC_APP_URL||'http://localhost:3000'));
+    return NextResponse.redirect(new URL('/dashboard?discord=not-configured',process.env.NEXT_PUBLIC_APP_URL||'http://localhost:3000'));
   }
 }

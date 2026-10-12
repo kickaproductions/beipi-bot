@@ -27,6 +27,6 @@ export async function GET(request:NextRequest){
     response.cookies.set(TWITCH_STATE_COOKIE,state,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:600});
     return response;
   }catch{
-    return NextResponse.redirect(new URL('/?twitch=not-configured',process.env.NEXT_PUBLIC_APP_URL||'http://localhost:3000'));
+    return NextResponse.redirect(new URL('/dashboard?twitch=not-configured',process.env.NEXT_PUBLIC_APP_URL||'http://localhost:3000'));
   }
 }

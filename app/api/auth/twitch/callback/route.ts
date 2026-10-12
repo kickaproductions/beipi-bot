@@ -7,7 +7,7 @@ type TokenResponse={access_token?:string;refresh_token?:string;expires_in?:numbe
 type UsersResponse={data?:Array<{id:string;login:string;display_name:string;profile_image_url:string}>};
 
 export async function GET(request:NextRequest){
-  const home=new URL('/',request.nextUrl.origin);
+  const home=new URL('/dashboard',request.nextUrl.origin);
   const code=request.nextUrl.searchParams.get('code');
   const state=request.nextUrl.searchParams.get('state');
   const expected=request.cookies.get(TWITCH_STATE_COOKIE)?.value;
