@@ -12,7 +12,6 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 create policy "People can read their own profile" on public.profiles for select using (auth.uid()=id);
-create policy "People can update their own public profile" on public.profiles for update using (auth.uid()=id) with check (auth.uid()=id);
 
 create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $$
 begin
