@@ -25,7 +25,8 @@ export async function GET(request:NextRequest){
     const userResponse=await fetch('https://discord.com/api/users/@me',{headers:{Authorization:`Bearer ${tokens.access_token}`},cache:'no-store'});
     const user=await userResponse.json() as UserResponse;
     if(!userResponse.ok||!user.id)throw new Error('Discord profile lookup failed');
-    const avatarUrl=user.avatar?`https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128`:`https://cdn.discordapp.com/embed/avatars/${Number(BigInt(user.id)>>22n)%6}.png`;
+    const defaultAvatar=Number((BigInt(user.id)>>BigInt(22))%BigInt(6));
+    const avatarUrl=user.avatar?`https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128`:`https://cdn.discordapp.com/embed/avatars/${defaultAvatar}.png`;
     const session=encryptDiscordSession({accessToken:tokens.access_token,refreshToken:tokens.refresh_token,expiresAt:Date.now()+(tokens.expires_in??604800)*1000,user:{id:user.id,username:user.username,displayName:user.global_name||user.username,avatarUrl}});
     home.searchParams.set('discord','connected');
     const response=NextResponse.redirect(home);

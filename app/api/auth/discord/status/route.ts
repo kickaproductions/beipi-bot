@@ -14,7 +14,8 @@ export async function GET(request:NextRequest){
     const response=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'});
     if(!response.ok)return NextResponse.json({connected:false});
     const guilds=await response.json() as Guild[];
-    const manageable=guilds.filter(g=>g.owner||(BigInt(g.permissions)&32n)===32n).map(g=>({id:g.id,name:g.name,iconUrl:g.icon?`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=128`:''}));
+    const manageGuildPermission=BigInt(32);
+    const manageable=guilds.filter(g=>g.owner||(BigInt(g.permissions)&manageGuildPermission)===manageGuildPermission).map(g=>({id:g.id,name:g.name,iconUrl:g.icon?`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=128`:''}));
     return NextResponse.json({connected:true,user:session.user,guilds:manageable},{headers:{'Cache-Control':'no-store'}});
   }catch{return NextResponse.json({connected:false})}
 }
