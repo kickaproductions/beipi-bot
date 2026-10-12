@@ -1,3 +1,3 @@
-import LandingPage from './landing-page';
+import Dashboard from '../dashboard';
 
-export default function Page(){return <LandingPage/>}
+export default function DashboardPage(){return <Dashboard/>}

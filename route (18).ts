@@ -1,4 +1,11 @@
 import {NextRequest,NextResponse} from 'next/server';
-import {decryptKickSession,KICK_SESSION_COOKIE} from '../session';
+import {decryptSession,TWITCH_SESSION_COOKIE} from '../session';
+
 export const runtime='nodejs';
-export async function POST(request:NextRequest){const value=request.cookies.get(KICK_SESSION_COOKIE)?.value;const session=value?decryptKickSession(value):null;if(session?.accessToken){try{await fetch(`https://id.kick.com/oauth/revoke?token=${encodeURIComponent(session.accessToken)}&token_hint_type=access_token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},cache:'no-store'})}catch{}}const response=NextResponse.json({ok:true});response.cookies.delete(KICK_SESSION_COOKIE);return response}
+
+export async function GET(request:NextRequest){
+  const raw=request.cookies.get(TWITCH_SESSION_COOKIE)?.value;
+  const session=raw?decryptSession(raw):null;
+  if(!session)return NextResponse.json({connected:false});
+  return NextResponse.json({connected:true,user:session.user,expiresAt:session.expiresAt},{headers:{'Cache-Control':'no-store'}});
+}

@@ -1,24 +1,9 @@
-import {NextRequest,NextResponse} from 'next/server';
-
-export const runtime='nodejs';
-
-// Manage Channels, Add Reactions, View Channels, Send Messages, Embed Links,
-// Attach Files, Read History, Mention Everyone, External Emoji, Manage Roles,
-// and Manage Events. Deliberately does not request Administrator.
-const BEIPI_PERMISSIONS='8858881104';
-
-export async function GET(request:NextRequest){
-  const clientId=process.env.DISCORD_CLIENT_ID;
-  if(!clientId){
-    const home=new URL('/',request.nextUrl.origin);
-    home.searchParams.set('discord','not-configured');
-    return NextResponse.redirect(home);
-  }
-
-  const authorize=new URL('https://discord.com/oauth2/authorize');
-  authorize.searchParams.set('client_id',clientId);
-  authorize.searchParams.set('scope','bot applications.commands');
-  authorize.searchParams.set('permissions',BEIPI_PERMISSIONS);
-  authorize.searchParams.set('integration_type','0');
-  return NextResponse.redirect(authorize);
-}
+type Draft={id:string;payload:unknown;updatedAt:string};
+const memory=globalThis as typeof globalThis&{beipiDrafts?:Draft[]};
+const drafts=memory.beipiDrafts??=[];memory.beipiDrafts=drafts;
+const json=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
+export async function GET(){return json(drafts)}
+async function save(request:Request,update:boolean){const body=await request.json() as {id?:string;payload?:unknown};if(!body.payload)return json({error:'Draft details are missing.'},400);let draft=update?drafts.find(value=>value.id===body.id):undefined;if(update&&!draft)return json({error:'Draft not found.'},404);if(!draft){draft={id:crypto.randomUUID(),payload:body.payload,updatedAt:new Date().toISOString()};drafts.unshift(draft)}else{draft.payload=body.payload;draft.updatedAt=new Date().toISOString()}return json(draft,update?200:201)}
+export const POST=(request:Request)=>save(request,false);
+export const PATCH=(request:Request)=>save(request,true);
+export async function DELETE(request:Request){const id=new URL(request.url).searchParams.get('id');const index=drafts.findIndex(value=>value.id===id);if(index<0)return json({error:'Draft not found.'},404);drafts.splice(index,1);return json({ok:true})}
