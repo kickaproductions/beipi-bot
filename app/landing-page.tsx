@@ -2,7 +2,7 @@
 
 import {useEffect,useState} from 'react';
 
-const futureProviders=['Kick','TikTok','Facebook'] as const;
+const futureProviders=['TikTok','Facebook'] as const;
 
 export default function LandingPage(){
   const [loginOpen,setLoginOpen]=useState(false);
@@ -13,7 +13,7 @@ export default function LandingPage(){
     window.addEventListener('keydown',close);
     return()=>window.removeEventListener('keydown',close);
   },[loginOpen]);
-  function comingSoon(name:string){setNotice(`${name} sign-in is coming soon. Twitch and Discord are ready to test now.`)}
+  function comingSoon(name:string){setNotice(`${name} sign-in is coming soon. Twitch, Discord, Google and Kick are ready to connect.`)}
   return <div className="landing-shell">
     <header className="landing-wrap landing-nav"><a className="landing-brand" href="#top">B.E.I.P.I. <span>BOT</span></a><nav><a href="#meet">Meet B.E.I.P.I.</a><a href="#features">Features</a><a href="#promise">Our promise</a><button className="landing-button ghost" onClick={()=>setLoginOpen(true)}>Log in</button></nav></header>
     <main id="top">
@@ -24,6 +24,6 @@ export default function LandingPage(){
       <section className="landing-wrap landing-section"><div className="landing-cta"><span>Ready when you are</span><h2>Come meet your<br/>new co-pilot.</h2><p>Connect your stream, settle in, and let B.E.I.P.I. help carry the mental load.</p><button className="landing-button primary" onClick={()=>setLoginOpen(true)}>Get started</button></div></section>
     </main>
     <footer className="landing-wrap landing-footer"><span>© 2026 B.E.I.P.I. Bot</span><span>Your stream. Your community. Your companion.</span><span>Privacy · Terms</span></footer>
-    {loginOpen&&<div className="landing-modal-backdrop" onMouseDown={event=>event.target===event.currentTarget&&setLoginOpen(false)}><section className="landing-login" role="dialog" aria-modal="true" aria-labelledby="landing-login-title"><button className="landing-close" aria-label="Close" onClick={()=>setLoginOpen(false)}>×</button><span className="landing-kicker">Welcome aboard</span><h2 id="landing-login-title">Join B.E.I.P.I.</h2><p>Create your home base or log back in.</p><div className="landing-account-options"><button className="create" onClick={()=>comingSoon('Account creation')}>Create an account</button><button onClick={()=>comingSoon('Email')}>Log in with email</button></div><div className="landing-divider">or continue with</div><div className="landing-providers"><a href="/api/auth/twitch/start"><i>T</i>Twitch</a><a href="/api/auth/discord/start"><i>D</i>Discord</a><a href="/api/auth/google/start"><i>G</i>Google</a>{futureProviders.map(provider=><button key={provider} onClick={()=>comingSoon(provider)}><i>{provider==='TikTok'?'♪':provider[0]}</i>{provider}</button>)}</div>{notice&&<div className="landing-login-notice" role="status">{notice}</div>}<small>Google asks for read-only YouTube access. B.E.I.P.I. cannot edit or delete your videos.</small></section></div>}
+    {loginOpen&&<div className="landing-modal-backdrop" onMouseDown={event=>event.target===event.currentTarget&&setLoginOpen(false)}><section className="landing-login" role="dialog" aria-modal="true" aria-labelledby="landing-login-title"><button className="landing-close" aria-label="Close" onClick={()=>setLoginOpen(false)}>×</button><span className="landing-kicker">Welcome aboard</span><h2 id="landing-login-title">Join B.E.I.P.I.</h2><p>Create your home base or log back in.</p><div className="landing-account-options"><button className="create" onClick={()=>comingSoon('Account creation')}>Create an account</button><button onClick={()=>comingSoon('Email')}>Log in with email</button></div><div className="landing-divider">or continue with</div><div className="landing-providers"><a href="/api/auth/twitch/start"><i>T</i>Twitch</a><a href="/api/auth/discord/start"><i>D</i>Discord</a><a href="/api/auth/google/start"><i>G</i>Google</a><a href="/api/auth/kick/start"><i>K</i>Kick</a>{futureProviders.map(provider=><button key={provider} onClick={()=>comingSoon(provider)}><i>{provider==='TikTok'?'♪':provider[0]}</i>{provider}</button>)}</div>{notice&&<div className="landing-login-notice" role="status">{notice}</div>}<small>Google asks for read-only YouTube access. B.E.I.P.I. cannot edit or delete your videos.</small></section></div>}
   </div>
 }
