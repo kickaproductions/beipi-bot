@@ -1,24 +1,4 @@
 import {NextRequest,NextResponse} from 'next/server';
-import {decryptKickSession,encryptKickSession,KICK_SESSION_COOKIE,kickConfig} from '../session';
+import {decryptKickSession,KICK_SESSION_COOKIE} from '../session';
 export const runtime='nodejs';
-type TokenResponse={access_token?:string;refresh_token?:string;expires_in?:number};
-export async function GET(request:NextRequest){
-  const value=request.cookies.get(KICK_SESSION_COOKIE)?.value;
-  if(!value)return NextResponse.json({connected:false});
-  let session=decryptKickSession(value);
-  if(!session)return NextResponse.json({connected:false});
-  if(session.expiresAt<=Date.now()+60_000){
-    if(!session.refreshToken)return NextResponse.json({connected:false});
-    try{
-      const {clientId,clientSecret}=kickConfig();
-      const tokenResponse=await fetch('https://id.kick.com/oauth/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',client_id:clientId,client_secret:clientSecret,refresh_token:session.refreshToken}),cache:'no-store'});
-      const tokens=await tokenResponse.json() as TokenResponse;
-      if(!tokenResponse.ok||!tokens.access_token)throw new Error('Kick refresh failed');
-      session={...session,accessToken:tokens.access_token,refreshToken:tokens.refresh_token||session.refreshToken,expiresAt:Date.now()+(tokens.expires_in??3600)*1000};
-      const response=NextResponse.json({connected:true,user:session.user},{headers:{'Cache-Control':'no-store'}});
-      response.cookies.set(KICK_SESSION_COOKIE,encryptKickSession(session),{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});
-      return response;
-    }catch{return NextResponse.json({connected:false})}
-  }
-  return NextResponse.json({connected:true,user:session.user},{headers:{'Cache-Control':'no-store'}});
-}
+export async function POST(request:NextRequest){const value=request.cookies.get(KICK_SESSION_COOKIE)?.value;const session=value?decryptKickSession(value):null;if(session?.accessToken){try{await fetch(`https://id.kick.com/oauth/revoke?token=${encodeURIComponent(session.accessToken)}&token_hint_type=access_token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},cache:'no-store'})}catch{}}const response=NextResponse.json({ok:true});response.cookies.delete(KICK_SESSION_COOKIE);return response}

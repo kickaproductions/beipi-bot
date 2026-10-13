@@ -1,21 +1,18 @@
 import {NextRequest,NextResponse} from 'next/server';
-import {decryptDiscordSession,DISCORD_SESSION_COOKIE} from '../session';
+import {decryptSession,TWITCH_SESSION_COOKIE,twitchConfig} from '../session';
 
 export const runtime='nodejs';
 
-type Guild={id:string;name:string;icon:string|null;owner:boolean;permissions:string};
-
-export async function GET(request:NextRequest){
-  const value=request.cookies.get(DISCORD_SESSION_COOKIE)?.value;
-  if(!value)return NextResponse.json({connected:false});
-  const session=decryptDiscordSession(value);
-  if(!session||session.expiresAt<=Date.now())return NextResponse.json({connected:false});
-  try{
-    const response=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'});
-    if(!response.ok)return NextResponse.json({connected:false});
-    const guilds=await response.json() as Guild[];
-    const manageGuildPermission=BigInt(32);
-    const manageable=guilds.filter(g=>g.owner||(BigInt(g.permissions)&manageGuildPermission)===manageGuildPermission).map(g=>({id:g.id,name:g.name,iconUrl:g.icon?`https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png?size=128`:''}));
-    return NextResponse.json({connected:true,user:session.user,guilds:manageable},{headers:{'Cache-Control':'no-store'}});
-  }catch{return NextResponse.json({connected:false})}
+export async function POST(request:NextRequest){
+  const raw=request.cookies.get(TWITCH_SESSION_COOKIE)?.value;
+  const session=raw?decryptSession(raw):null;
+  if(session){
+    try{
+      const {clientId}=twitchConfig();
+      await fetch('https://id.twitch.tv/oauth2/revoke',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:clientId,token:session.accessToken}),cache:'no-store'});
+    }catch{}
+  }
+  const response=NextResponse.json({connected:false});
+  response.cookies.delete(TWITCH_SESSION_COOKIE);
+  return response;
 }

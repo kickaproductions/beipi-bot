@@ -1,24 +1,28 @@
+import {randomBytes} from 'node:crypto';
 import {NextRequest,NextResponse} from 'next/server';
-import {decryptKickSession,encryptKickSession,KICK_SESSION_COOKIE,kickConfig} from '../session';
+import {DISCORD_STATE_COOKIE,discordConfig} from '../session';
+
 export const runtime='nodejs';
-type TokenResponse={access_token?:string;refresh_token?:string;expires_in?:number};
+
 export async function GET(request:NextRequest){
-  const value=request.cookies.get(KICK_SESSION_COOKIE)?.value;
-  if(!value)return NextResponse.json({connected:false});
-  let session=decryptKickSession(value);
-  if(!session)return NextResponse.json({connected:false});
-  if(session.expiresAt<=Date.now()+60_000){
-    if(!session.refreshToken)return NextResponse.json({connected:false});
-    try{
-      const {clientId,clientSecret}=kickConfig();
-      const tokenResponse=await fetch('https://id.kick.com/oauth/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',client_id:clientId,client_secret:clientSecret,refresh_token:session.refreshToken}),cache:'no-store'});
-      const tokens=await tokenResponse.json() as TokenResponse;
-      if(!tokenResponse.ok||!tokens.access_token)throw new Error('Kick refresh failed');
-      session={...session,accessToken:tokens.access_token,refreshToken:tokens.refresh_token||session.refreshToken,expiresAt:Date.now()+(tokens.expires_in??3600)*1000};
-      const response=NextResponse.json({connected:true,user:session.user},{headers:{'Cache-Control':'no-store'}});
-      response.cookies.set(KICK_SESSION_COOKIE,encryptKickSession(session),{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});
-      return response;
-    }catch{return NextResponse.json({connected:false})}
+  try{
+    const {clientId,redirectUri}=discordConfig();
+    const callbackUrl=new URL(redirectUri);
+    if(request.nextUrl.origin!==callbackUrl.origin){
+      return NextResponse.redirect(new URL('/api/auth/discord/start',callbackUrl.origin));
+    }
+    const state=randomBytes(24).toString('base64url');
+    const authorize=new URL('https://discord.com/oauth2/authorize');
+    authorize.searchParams.set('response_type','code');
+    authorize.searchParams.set('client_id',clientId);
+    authorize.searchParams.set('redirect_uri',redirectUri);
+    authorize.searchParams.set('scope','identify guilds');
+    authorize.searchParams.set('state',state);
+    authorize.searchParams.set('prompt','consent');
+    const response=NextResponse.redirect(authorize);
+    response.cookies.set(DISCORD_STATE_COOKIE,state,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:600});
+    return response;
+  }catch{
+    return NextResponse.redirect(new URL('/dashboard?discord=not-configured',process.env.NEXT_PUBLIC_APP_URL||'http://localhost:3000'));
   }
-  return NextResponse.json({connected:true,user:session.user},{headers:{'Cache-Control':'no-store'}});
 }
