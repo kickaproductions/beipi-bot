@@ -20,6 +20,8 @@ export default async function DeveloperPage(){
   if(!user)redirect('/account');
   const {data:profile}=await supabase.from('profiles').select('display_name,role,founding_tester,lifetime_free').eq('id',user.id).maybeSingle();
   if(profile?.role!=='developer')redirect('/dashboard');
+  const {data:assurance}=await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if(assurance?.currentLevel!=='aal2')redirect('/account/security?next=/developer');
   const name=profile.display_name||user.user_metadata?.full_name||'Captain';
   return <main className="developer-shell">
     <header className="developer-topbar"><a href="/dashboard"><ArrowLeft size={16}/> Back to dashboard</a><span><ShieldCheck size={15}/> Developer access</span></header>
