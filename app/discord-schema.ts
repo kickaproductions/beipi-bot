@@ -2,6 +2,7 @@ import { z } from 'zod';
 export const draftSchema=z.object({
   type:z.enum(['channel','reaction']), title:z.string().trim().min(1).max(100),
   server:z.string().trim().min(1).max(100), mode:z.enum(['existing','new']),
+  serverId:z.string().max(30).optional(), channelId:z.string().max(30).optional(),
   channel:z.string().trim().min(1).max(100), category:z.string().max(100).default(''),
   text:z.string().max(2000), bannerId:z.string().uuid().nullable(),
   reactions:z.array(z.object({emoji:z.string().trim().min(1).max(100),role:z.string().trim().min(1).max(100)})).max(20),
