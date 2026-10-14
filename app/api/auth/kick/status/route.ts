@@ -1,9 +1,11 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {decryptKickSession,encryptKickSession,KICK_SESSION_COOKIE,kickConfig} from '../session';
+import {getPlatformConnection,savePlatformConnection} from '@/lib/platform-connections';
 export const runtime='nodejs';
 type TokenResponse={access_token?:string;refresh_token?:string;expires_in?:number};
 export async function GET(request:NextRequest){
-  const value=request.cookies.get(KICK_SESSION_COOKIE)?.value;
+  let value=request.cookies.get(KICK_SESSION_COOKIE)?.value;
+  if(!value){try{value=(await getPlatformConnection('kick'))?.encrypted_session}catch{}}
   if(!value)return NextResponse.json({connected:false});
   let session=decryptKickSession(value);
   if(!session)return NextResponse.json({connected:false});
@@ -15,10 +17,14 @@ export async function GET(request:NextRequest){
       const tokens=await tokenResponse.json() as TokenResponse;
       if(!tokenResponse.ok||!tokens.access_token)throw new Error('Kick refresh failed');
       session={...session,accessToken:tokens.access_token,refreshToken:tokens.refresh_token||session.refreshToken,expiresAt:Date.now()+(tokens.expires_in??3600)*1000};
+      const encrypted=encryptKickSession(session);
+      try{await savePlatformConnection({platform:'kick',externalUserId:String(session.user.id),displayName:session.user.username,username:session.user.username,avatarUrl:session.user.profilePicture,encryptedSession:encrypted})}catch{}
       const response=NextResponse.json({connected:true,user:session.user},{headers:{'Cache-Control':'no-store'}});
-      response.cookies.set(KICK_SESSION_COOKIE,encryptKickSession(session),{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});
+      response.cookies.set(KICK_SESSION_COOKIE,encrypted,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});
       return response;
     }catch{return NextResponse.json({connected:false})}
   }
-  return NextResponse.json({connected:true,user:session.user},{headers:{'Cache-Control':'no-store'}});
+  const response=NextResponse.json({connected:true,user:session.user},{headers:{'Cache-Control':'no-store'}});
+  if(!request.cookies.get(KICK_SESSION_COOKIE)&&value)response.cookies.set(KICK_SESSION_COOKIE,value,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});
+  return response;
 }

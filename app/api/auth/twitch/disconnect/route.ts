@@ -1,5 +1,6 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {decryptSession,TWITCH_SESSION_COOKIE,twitchConfig} from '../session';
+import {removePlatformConnection} from '@/lib/platform-connections';
 
 export const runtime='nodejs';
 
@@ -12,6 +13,7 @@ export async function POST(request:NextRequest){
       await fetch('https://id.twitch.tv/oauth2/revoke',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:clientId,token:session.accessToken}),cache:'no-store'});
     }catch{}
   }
+  try{await removePlatformConnection('twitch')}catch{}
   const response=NextResponse.json({connected:false});
   response.cookies.delete(TWITCH_SESSION_COOKIE);
   return response;

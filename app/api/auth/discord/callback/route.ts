@@ -1,5 +1,6 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {DISCORD_SESSION_COOKIE,DISCORD_STATE_COOKIE,discordConfig,encryptDiscordSession} from '../session';
+import {savePlatformConnection} from '@/lib/platform-connections';
 
 export const runtime='nodejs';
 
@@ -28,6 +29,7 @@ export async function GET(request:NextRequest){
     const defaultAvatar=Number((BigInt(user.id)>>BigInt(22))%BigInt(6));
     const avatarUrl=user.avatar?`https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=128`:`https://cdn.discordapp.com/embed/avatars/${defaultAvatar}.png`;
     const session=encryptDiscordSession({accessToken:tokens.access_token,refreshToken:tokens.refresh_token,expiresAt:Date.now()+(tokens.expires_in??604800)*1000,user:{id:user.id,username:user.username,displayName:user.global_name||user.username,avatarUrl}});
+    await savePlatformConnection({platform:'discord',externalUserId:user.id,displayName:user.global_name||user.username,username:user.username,avatarUrl,encryptedSession:session});
     home.searchParams.set('discord','connected');
     const response=NextResponse.redirect(home);
     response.cookies.set(DISCORD_SESSION_COOKIE,session,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});

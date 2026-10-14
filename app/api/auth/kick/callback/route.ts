@@ -1,5 +1,6 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {encryptKickSession,KICK_SESSION_COOKIE,KICK_STATE_COOKIE,KICK_VERIFIER_COOKIE,kickConfig} from '../session';
+import {savePlatformConnection} from '@/lib/platform-connections';
 
 export const runtime='nodejs';
 type TokenResponse={access_token?:string;refresh_token?:string;expires_in?:number};
@@ -26,6 +27,7 @@ export async function GET(request:NextRequest){
     const username=user?.name??user?.username;
     if(!userResponse.ok||!user||id===undefined||!username)throw new Error('Kick profile lookup failed');
     const session=encryptKickSession({accessToken:tokens.access_token,refreshToken:tokens.refresh_token||'',expiresAt:Date.now()+(tokens.expires_in??3600)*1000,user:{id,username,email:user.email||'',profilePicture:user.profile_picture??user.profile_picture_url??''}});
+    await savePlatformConnection({platform:'kick',externalUserId:String(id),displayName:username,username,avatarUrl:user.profile_picture??user.profile_picture_url??'',encryptedSession:session});
     home.searchParams.set('kick','connected');
     const response=NextResponse.redirect(home);
     response.cookies.set(KICK_SESSION_COOKIE,session,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});

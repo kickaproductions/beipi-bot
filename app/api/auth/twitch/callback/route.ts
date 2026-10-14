@@ -1,5 +1,6 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {encryptSession,TWITCH_SESSION_COOKIE,TWITCH_STATE_COOKIE,twitchConfig} from '../session';
+import {savePlatformConnection} from '@/lib/platform-connections';
 
 export const runtime='nodejs';
 
@@ -27,6 +28,7 @@ export async function GET(request:NextRequest){
     const user=users.data?.[0];
     if(!userResponse.ok||!user)throw new Error('Twitch profile lookup failed');
     const session=encryptSession({accessToken:tokens.access_token,refreshToken:tokens.refresh_token,expiresAt:Date.now()+(tokens.expires_in??14400)*1000,user:{id:user.id,login:user.login,displayName:user.display_name,profileImageUrl:user.profile_image_url}});
+    await savePlatformConnection({platform:'twitch',externalUserId:user.id,displayName:user.display_name,username:user.login,avatarUrl:user.profile_image_url,encryptedSession:session});
     home.searchParams.set('twitch','connected');
     const response=NextResponse.redirect(home);
     response.cookies.set(TWITCH_SESSION_COOKIE,session,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});
