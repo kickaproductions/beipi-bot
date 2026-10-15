@@ -48,7 +48,7 @@ export async function POST(request:NextRequest){
       const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)return json({error:'Sign in again before publishing.'},401);
       const {data:banner}=await supabase.from('discord_banners').select('storage_path,file_name,mime_type').eq('id',draft.bannerId).eq('user_id',user.id).maybeSingle();if(!banner)return json({error:'That banner could not be found. Upload it again.'},404);
       const {data:file,error:fileError}=await supabase.storage.from('discord-banners').download(banner.storage_path);if(fileError||!file)return json({error:'That banner file could not be loaded.'},404);
-      const form=new FormData();form.set('payload_json',JSON.stringify({content:draft.text,attachments:[{id:0,filename:banner.file_name,description:draft.bannerAlt}]}));form.set('files[0]',new Blob([await file.arrayBuffer()],{type:banner.mime_type}),banner.file_name);body=form;
+      const attachment={id:0,filename:banner.file_name,...(draft.bannerAlt?{description:draft.bannerAlt}:{})};const form=new FormData();form.set('payload_json',JSON.stringify({content:draft.text,attachments:[attachment]}));form.set('files[0]',new Blob([await file.arrayBuffer()],{type:banner.mime_type}),banner.file_name);body=form;
     }else{headers['Content-Type']='application/json';body=JSON.stringify({content:draft.text})}
     const sendResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages`,{method:'POST',headers,body,cache:'no-store'});
     const sent=await sendResponse.json() as {id?:string;message?:string};

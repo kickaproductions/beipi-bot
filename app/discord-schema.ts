@@ -11,7 +11,6 @@ export const draftSchema=z.object({
   if(value.mode==='new'&&!/^[a-z0-9_-]+$/.test(value.channel))ctx.addIssue({code:'custom',path:['channel'],message:'Use lowercase letters, numbers, hyphens or underscores for a new channel.'});
   if(value.type==='reaction'&&!value.reactions.length)ctx.addIssue({code:'custom',path:['reactions'],message:'Add at least one emoji and role.'});
   if(value.type==='channel'&&!value.text.trim()&&!value.bannerId)ctx.addIssue({code:'custom',path:['text'],message:'Add a banner or some text.'});
-  if(value.bannerId&&!value.bannerAlt.trim())ctx.addIssue({code:'custom',path:['bannerAlt'],message:'Add a short image description for the banner.'});
   const emoji=value.reactions.map(r=>r.emoji);if(new Set(emoji).size!==emoji.length)ctx.addIssue({code:'custom',path:['reactions'],message:'Use a different emoji for each role.'});
 });
 export type DraftPayload=z.infer<typeof draftSchema>;
