@@ -1,9 +1,29 @@
-type Draft={id:string;payload:unknown;updatedAt:string};
-const memory=globalThis as typeof globalThis&{beipiDrafts?:Draft[]};
-const drafts=memory.beipiDrafts??=[];memory.beipiDrafts=drafts;
-const json=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
-export async function GET(){return json(drafts)}
-async function save(request:Request,update:boolean){const body=await request.json() as {id?:string;payload?:unknown};if(!body.payload)return json({error:'Draft details are missing.'},400);let draft=update?drafts.find(value=>value.id===body.id):undefined;if(update&&!draft)return json({error:'Draft not found.'},404);if(!draft){draft={id:crypto.randomUUID(),payload:body.payload,updatedAt:new Date().toISOString()};drafts.unshift(draft)}else{draft.payload=body.payload;draft.updatedAt=new Date().toISOString()}return json(draft,update?200:201)}
-export const POST=(request:Request)=>save(request,false);
-export const PATCH=(request:Request)=>save(request,true);
-export async function DELETE(request:Request){const id=new URL(request.url).searchParams.get('id');const index=drafts.findIndex(value=>value.id===id);if(index<0)return json({error:'Draft not found.'},404);drafts.splice(index,1);return json({ok:true})}
+import {createHash,randomBytes} from 'node:crypto';
+import {NextRequest,NextResponse} from 'next/server';
+import {KICK_STATE_COOKIE,KICK_VERIFIER_COOKIE,kickConfig} from '../session';
+
+export const runtime='nodejs';
+
+export async function GET(request:NextRequest){
+  try{
+    const {clientId,redirectUri}=kickConfig();
+    const callbackUrl=new URL(redirectUri);
+    if(request.nextUrl.origin!==callbackUrl.origin)return NextResponse.redirect(new URL('/api/auth/kick/start',callbackUrl.origin));
+    const state=randomBytes(24).toString('base64url');
+    const verifier=randomBytes(48).toString('base64url');
+    const challenge=createHash('sha256').update(verifier).digest('base64url');
+    const authorize=new URL('https://id.kick.com/oauth/authorize');
+    authorize.searchParams.set('response_type','code');
+    authorize.searchParams.set('client_id',clientId);
+    authorize.searchParams.set('redirect_uri',redirectUri);
+    authorize.searchParams.set('scope','user:read');
+    authorize.searchParams.set('code_challenge',challenge);
+    authorize.searchParams.set('code_challenge_method','S256');
+    authorize.searchParams.set('state',state);
+    const response=NextResponse.redirect(authorize);
+    const cookie={httpOnly:true,secure:true,sameSite:'lax' as const,path:'/',maxAge:600};
+    response.cookies.set(KICK_STATE_COOKIE,state,cookie);
+    response.cookies.set(KICK_VERIFIER_COOKIE,verifier,cookie);
+    return response;
+  }catch{return NextResponse.redirect(new URL('/dashboard?kick=not-configured',process.env.NEXT_PUBLIC_APP_URL||'http://localhost:3000'))}
+}

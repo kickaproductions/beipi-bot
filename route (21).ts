@@ -1,8 +1,30 @@
-type Item={id:string;kind:string;title:string;note:string;due:string|null;done:boolean;createdAt:string};
-const memory=globalThis as typeof globalThis&{beipiItems?:Item[]};
-const items=memory.beipiItems??=[];memory.beipiItems=items;
-const json=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
-export async function GET(){return json([...items].reverse())}
-export async function POST(request:Request){const body=await request.json() as {kind?:string;title?:string;note?:string;due?:string|null};if(!body.title||!body.kind||!['reminder','checklist','idea','connection'].includes(body.kind))return json({error:'Check the title and try again.'},400);const item:Item={id:crypto.randomUUID(),kind:body.kind,title:String(body.title).slice(0,200),note:String(body.note??'').slice(0,2000),due:body.due??null,done:false,createdAt:new Date().toISOString()};items.push(item);return json(item,201)}
-export async function PATCH(request:Request){const body=await request.json() as {id?:string;done?:boolean;due?:string|null};const item=items.find(value=>value.id===body.id);if(!item)return json({error:'Item not found.'},404);if(typeof body.done==='boolean')item.done=body.done;if(body.due===null||typeof body.due==='string')item.due=body.due;return json(item)}
-export async function DELETE(request:Request){const id=new URL(request.url).searchParams.get('id');const index=items.findIndex(value=>value.id===id);if(index<0)return json({error:'Item not found.'},404);items.splice(index,1);return json({ok:true})}
+import {NextRequest,NextResponse} from 'next/server';
+import {decryptKickSession,encryptKickSession,KICK_SESSION_COOKIE,kickConfig} from '../session';
+import {getPlatformConnection,savePlatformConnection} from '@/lib/platform-connections';
+export const runtime='nodejs';
+type TokenResponse={access_token?:string;refresh_token?:string;expires_in?:number};
+export async function GET(request:NextRequest){
+  let value=request.cookies.get(KICK_SESSION_COOKIE)?.value;
+  if(!value){try{value=(await getPlatformConnection('kick'))?.encrypted_session}catch{}}
+  if(!value)return NextResponse.json({connected:false});
+  let session=decryptKickSession(value);
+  if(!session)return NextResponse.json({connected:false});
+  if(session.expiresAt<=Date.now()+60_000){
+    if(!session.refreshToken)return NextResponse.json({connected:false});
+    try{
+      const {clientId,clientSecret}=kickConfig();
+      const tokenResponse=await fetch('https://id.kick.com/oauth/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',client_id:clientId,client_secret:clientSecret,refresh_token:session.refreshToken}),cache:'no-store'});
+      const tokens=await tokenResponse.json() as TokenResponse;
+      if(!tokenResponse.ok||!tokens.access_token)throw new Error('Kick refresh failed');
+      session={...session,accessToken:tokens.access_token,refreshToken:tokens.refresh_token||session.refreshToken,expiresAt:Date.now()+(tokens.expires_in??3600)*1000};
+      const encrypted=encryptKickSession(session);
+      try{await savePlatformConnection({platform:'kick',externalUserId:String(session.user.id),displayName:session.user.username,username:session.user.username,avatarUrl:session.user.profilePicture,encryptedSession:encrypted})}catch{}
+      const response=NextResponse.json({connected:true,user:session.user},{headers:{'Cache-Control':'no-store'}});
+      response.cookies.set(KICK_SESSION_COOKIE,encrypted,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});
+      return response;
+    }catch{return NextResponse.json({connected:false})}
+  }
+  const response=NextResponse.json({connected:true,user:session.user},{headers:{'Cache-Control':'no-store'}});
+  if(!request.cookies.get(KICK_SESSION_COOKIE)&&value)response.cookies.set(KICK_SESSION_COOKIE,value,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});
+  return response;
+}

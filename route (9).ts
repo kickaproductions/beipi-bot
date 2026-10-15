@@ -1,5 +1,15 @@
 import {NextRequest,NextResponse} from 'next/server';
-import {encryptGoogleSession,GOOGLE_SESSION_COOKIE,GOOGLE_STATE_COOKIE,googleConfig} from '../session';
+import {decryptSession,TWITCH_SESSION_COOKIE} from '../session';
+import {getPlatformConnection} from '@/lib/platform-connections';
+
 export const runtime='nodejs';
-type TokenResponse={access_token?:string;refresh_token?:string;expires_in?:number};type UserInfo={sub:string;email?:string;name?:string;picture?:string};type ChannelResponse={items?:Array<{id:string;snippet?:{title?:string;customUrl?:string;thumbnails?:{default?:{url?:string}}}}>};
-export async function GET(request:NextRequest){const home=new URL('/dashboard',request.nextUrl.origin);const code=request.nextUrl.searchParams.get('code');const state=request.nextUrl.searchParams.get('state');const expected=request.cookies.get(GOOGLE_STATE_COOKIE)?.value;if(request.nextUrl.searchParams.get('error')){home.searchParams.set('google','denied');return NextResponse.redirect(home)}if(!code||!state||!expected||state!==expected){home.searchParams.set('google','invalid-state');return NextResponse.redirect(home)}try{const {clientId,clientSecret,redirectUri}=googleConfig();const tokenResponse=await fetch('https://oauth2.googleapis.com/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:clientId,client_secret:clientSecret,code,grant_type:'authorization_code',redirect_uri:redirectUri}),cache:'no-store'});const tokens=await tokenResponse.json() as TokenResponse;if(!tokenResponse.ok||!tokens.access_token)throw new Error('Token exchange failed');const headers={Authorization:`Bearer ${tokens.access_token}`};const [userResponse,channelResponse]=await Promise.all([fetch('https://openidconnect.googleapis.com/v1/userinfo',{headers,cache:'no-store'}),fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',{headers,cache:'no-store'})]);const user=await userResponse.json() as UserInfo;const channels=await channelResponse.json() as ChannelResponse;if(!userResponse.ok||!user.sub)throw new Error('Google profile lookup failed');const item=channelResponse.ok?channels.items?.[0]:undefined;const session=encryptGoogleSession({accessToken:tokens.access_token,refreshToken:tokens.refresh_token||'',expiresAt:Date.now()+(tokens.expires_in??3600)*1000,user:{id:user.sub,email:user.email||'',name:user.name||user.email||'Google user',picture:user.picture||''},channel:item?{id:item.id,title:item.snippet?.title||'YouTube channel',thumbnailUrl:item.snippet?.thumbnails?.default?.url||'',handle:item.snippet?.customUrl}:undefined});home.searchParams.set('google','connected');const response=NextResponse.redirect(home);response.cookies.set(GOOGLE_SESSION_COOKIE,session,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});response.cookies.delete(GOOGLE_STATE_COOKIE);return response}catch{home.searchParams.set('google','error');return NextResponse.redirect(home)}}
+
+export async function GET(request:NextRequest){
+  let raw=request.cookies.get(TWITCH_SESSION_COOKIE)?.value;
+  if(!raw){try{raw=(await getPlatformConnection('twitch'))?.encrypted_session}catch{}}
+  const session=raw?decryptSession(raw):null;
+  if(!session)return NextResponse.json({connected:false});
+  const response=NextResponse.json({connected:true,user:session.user,expiresAt:session.expiresAt},{headers:{'Cache-Control':'no-store'}});
+  if(!request.cookies.get(TWITCH_SESSION_COOKIE)&&raw)response.cookies.set(TWITCH_SESSION_COOKIE,raw,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});
+  return response;
+}
