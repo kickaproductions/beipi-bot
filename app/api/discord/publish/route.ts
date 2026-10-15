@@ -2,6 +2,7 @@ import {NextRequest,NextResponse} from 'next/server';
 import {draftSchema} from '@/app/discord-schema';
 import {decryptDiscordSession,DISCORD_SESSION_COOKIE} from '@/app/api/auth/discord/session';
 import {getPlatformConnection} from '@/lib/platform-connections';
+import {createClient} from '@/lib/supabase/server';
 
 export const runtime='nodejs';
 type Guild={id:string;owner:boolean;permissions:string};
@@ -18,7 +19,6 @@ export async function POST(request:NextRequest){
   if(!parsed.success)return json({error:parsed.error.issues[0]?.message||'Check the message details.'},400);
   const draft=parsed.data;
   if(!draft.serverId)return json({error:'Choose a Discord server first.'},400);
-  if(!draft.text.trim())return json({error:'Add some message text before publishing.'},400);
   const botToken=process.env.DISCORD_BOT_TOKEN;
   if(!botToken)return json({error:'B.E.I.P.I.’s Discord bot token is not configured.'},503);
   try{
@@ -43,7 +43,14 @@ export async function POST(request:NextRequest){
       channelId=created.id;channelName=created.name;
     }
     if(!channelId)return json({error:'Choose an existing Discord channel first.'},400);
-    const sendResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages`,{method:'POST',headers:{Authorization:`Bot ${botToken}`,'Content-Type':'application/json'},body:JSON.stringify({content:draft.text}),cache:'no-store'});
+    let body:BodyInit;const headers:Record<string,string>={Authorization:`Bot ${botToken}`};
+    if(draft.bannerId){
+      const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)return json({error:'Sign in again before publishing.'},401);
+      const {data:banner}=await supabase.from('discord_banners').select('storage_path,file_name,mime_type').eq('id',draft.bannerId).eq('user_id',user.id).maybeSingle();if(!banner)return json({error:'That banner could not be found. Upload it again.'},404);
+      const {data:file,error:fileError}=await supabase.storage.from('discord-banners').download(banner.storage_path);if(fileError||!file)return json({error:'That banner file could not be loaded.'},404);
+      const form=new FormData();form.set('payload_json',JSON.stringify({content:draft.text,attachments:[{id:0,filename:banner.file_name,description:draft.bannerAlt}]}));form.set('files[0]',new Blob([await file.arrayBuffer()],{type:banner.mime_type}),banner.file_name);body=form;
+    }else{headers['Content-Type']='application/json';body=JSON.stringify({content:draft.text})}
+    const sendResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages`,{method:'POST',headers,body,cache:'no-store'});
     const sent=await sendResponse.json() as {id?:string;message?:string};
     if(!sendResponse.ok||!sent.id)return json({error:sent.message||'B.E.I.P.I. could not publish there. Check her channel permissions.'},sendResponse.status||502);
     return json({ok:true,messageId:sent.id,channelId,channelName});
