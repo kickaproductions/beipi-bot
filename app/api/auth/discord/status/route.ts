@@ -7,8 +7,9 @@ export const runtime='nodejs';
 type Guild={id:string;name:string;icon:string|null;owner:boolean;permissions:string};
 
 export async function GET(request:NextRequest){
-  let value=request.cookies.get(DISCORD_SESSION_COOKIE)?.value;
-  if(!value){try{value=(await getPlatformConnection('discord'))?.encrypted_session}catch{}}
+  let value:string|undefined;
+  try{value=(await getPlatformConnection('discord'))?.encrypted_session}catch{}
+  if(!value)value=request.cookies.get(DISCORD_SESSION_COOKIE)?.value;
   if(!value)return NextResponse.json({connected:false});
   const session=decryptDiscordSession(value);
   if(!session||session.expiresAt<=Date.now())return NextResponse.json({connected:false});

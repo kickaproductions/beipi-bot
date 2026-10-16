@@ -9,8 +9,9 @@ type DiscordChannel={id:string;name:string;type:number;position:number;parent_id
 export async function GET(request:NextRequest){
   const guildId=request.nextUrl.searchParams.get('guildId');
   if(!guildId)return NextResponse.json({error:'Choose a Discord server first.'},{status:400});
-  let encrypted=request.cookies.get(DISCORD_SESSION_COOKIE)?.value;
-  if(!encrypted){try{encrypted=(await getPlatformConnection('discord'))?.encrypted_session}catch{}}
+  let encrypted:string|undefined;
+  try{encrypted=(await getPlatformConnection('discord'))?.encrypted_session}catch{}
+  if(!encrypted)encrypted=request.cookies.get(DISCORD_SESSION_COOKIE)?.value;
   let session=encrypted?decryptDiscordSession(encrypted):null;
   if(!session)return NextResponse.json({error:'Connect Discord before choosing a channel.'},{status:401});
   try{
