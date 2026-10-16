@@ -1,6 +1,6 @@
 import {NextRequest,NextResponse} from 'next/server';
-import {decryptDiscordSession,DISCORD_SESSION_COOKIE} from '../session';
-import {getPlatformConnection} from '@/lib/platform-connections';
+import {decryptDiscordSession,DISCORD_SESSION_COOKIE,encryptDiscordSession,refreshDiscordSession} from '../session';
+import {getPlatformConnection,savePlatformConnection} from '@/lib/platform-connections';
 
 export const runtime='nodejs';
 type Guild={id:string;owner:boolean;permissions:string};
@@ -13,10 +13,11 @@ export async function GET(request:NextRequest){
   if(!guildId)return NextResponse.json({error:'Choose a Discord server first.'},{status:400});
   let encrypted=request.cookies.get(DISCORD_SESSION_COOKIE)?.value;
   if(!encrypted){try{encrypted=(await getPlatformConnection('discord'))?.encrypted_session}catch{}}
-  const session=encrypted?decryptDiscordSession(encrypted):null;
+  let session=encrypted?decryptDiscordSession(encrypted):null;
   if(!session)return NextResponse.json({error:'Connect Discord before choosing roles.'},{status:401});
   try{
-    const guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'});
+    let guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'});
+    if(guildResponse.status===401){const refreshed=await refreshDiscordSession(session);if(refreshed){session=refreshed;encrypted=encryptDiscordSession(refreshed);await savePlatformConnection({platform:'discord',externalUserId:refreshed.user.id,displayName:refreshed.user.displayName,username:refreshed.user.username,avatarUrl:refreshed.user.avatarUrl,encryptedSession:encrypted});guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'})}}
     if(!guildResponse.ok)throw new Error('Discord account access expired. Reconnect Discord and try again.');
     const guilds=await guildResponse.json() as Guild[];
     const manageGuild=BigInt(32);
@@ -37,6 +38,6 @@ export async function GET(request:NextRequest){
     const botTop=Math.max(0,...roles.filter(role=>member.roles.includes(role.id)).map(role=>role.position));
     const sensitive=BigInt(8)|BigInt(2)|BigInt(4)|BigInt(32)|BigInt(268435456)|BigInt(1099511627776);
     const safe=roles.filter(role=>role.id!==guildId&&!role.managed&&role.position<botTop&&(BigInt(role.permissions)&sensitive)===BigInt(0)).sort((a,b)=>b.position-a.position).map(role=>({id:role.id,name:role.name,color:role.color,position:role.position}));
-    return NextResponse.json({roles:safe,botRoleReady:botTop>0},{headers:{'Cache-Control':'no-store'}});
+    const response=NextResponse.json({roles:safe,botRoleReady:botTop>0},{headers:{'Cache-Control':'no-store'}});if(encrypted)response.cookies.set(DISCORD_SESSION_COOKIE,encrypted,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});return response;
   }catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Discord roles could not be loaded.'},{status:502})}
 }

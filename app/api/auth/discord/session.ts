@@ -41,3 +41,15 @@ export function discordConfig(){
   if(!clientId||!clientSecret||!redirectUri)throw new Error('Discord OAuth is not configured');
   return {clientId,clientSecret,redirectUri};
 }
+
+type RefreshResponse={access_token?:string;refresh_token?:string;expires_in?:number};
+export async function refreshDiscordSession(session:DiscordSession){
+  if(!session.refreshToken)return null;
+  try{
+    const {clientId,clientSecret}=discordConfig();
+    const response=await fetch('https://discord.com/api/oauth2/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:clientId,client_secret:clientSecret,grant_type:'refresh_token',refresh_token:session.refreshToken}),cache:'no-store'});
+    const tokens=await response.json() as RefreshResponse;
+    if(!response.ok||!tokens.access_token)return null;
+    return {...session,accessToken:tokens.access_token,refreshToken:tokens.refresh_token||session.refreshToken,expiresAt:Date.now()+(tokens.expires_in??604800)*1000};
+  }catch{return null}
+}
