@@ -161,8 +161,10 @@
 
 .discord-connect-notice{align-items:center}
 .discord-connect-notice>div{flex:1}
+.live-role-card{margin-bottom:24px}.live-role-card>.card-heading{border-bottom:1px solid var(--line)}.hybrid-badge{font-size:9px;letter-spacing:.7px;text-transform:uppercase;color:#70508b;background:#eee5f6;border-radius:20px;padding:6px 10px}.live-role-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.live-role-grid>label{display:block;font-size:11px;font-weight:500;color:#776085}.live-options{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:4px}.live-options>label{display:flex;gap:10px;padding:14px;border:1px solid var(--line);border-radius:9px;background:#fcfafd;color:#776085}.live-options input{margin-top:2px;align-self:flex-start;accent-color:var(--purple)}.live-options strong{display:block;font-size:11px;font-weight:500}.live-options small{display:block;font-size:9px;line-height:1.5;color:#a38db3;margin-top:5px}.save-success{display:flex;align-items:center;gap:7px;color:#56816a;background:#edf7f0;border:1px solid #d5e9db;border-radius:8px;padding:11px 13px;font-size:11px;margin-top:16px}.dark-theme .hybrid-badge{background:#3b2948;color:#d7bce7}.dark-theme .live-options>label{background:#1b1423;border-color:#4b3a58}.dark-theme .save-success{background:#1d3026;border-color:#31513d;color:#9bc5a9}
 .discord-add{margin-left:auto;text-decoration:none}
 .discord-add svg:last-child{opacity:.7}
+@media(max-width:900px){.live-role-grid,.live-options{grid-template-columns:1fr}}
 @media(max-width:750px){.discord-connect-notice{flex-wrap:wrap}.discord-add{margin-left:33px}}
 @media(max-width:500px){.discord-add{width:calc(100% - 33px)}}
 
