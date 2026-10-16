@@ -40,6 +40,20 @@ async function finishLive(member,config){
  await supabase.from('discord_live_events').delete().eq('guild_id',member.guild.id).eq('member_id',member.id);console.log(`[offline] ${member.user.tag} in ${member.guild.name}`);
 }
 
+async function reconcileAll(){
+ for(const config of settings.values()){
+  if(!config.discord_presence_enabled)continue;
+  const guild=client.guilds.cache.get(config.guild_id);if(!guild)continue;
+  const members=await guild.members.fetch().catch(error=>{console.error(`[members] ${guild.name}:`,error.message);return null});if(!members)continue;
+  for(const member of members.values()){
+   if(member.user.bot||!member.roles.cache.has(config.creator_role_id))continue;
+   const key=`${guild.id}:${member.id}`;
+   if(isStreaming(member.presence)){const timer=pendingOffline.get(key);if(timer){clearTimeout(timer);pendingOffline.delete(key)}void serial(key,()=>goLive(member,member.presence,config))}
+   else if(member.roles.cache.has(config.live_role_id)&&!pendingOffline.has(key)){const timer=setTimeout(()=>{pendingOffline.delete(key);void serial(key,()=>finishLive(member,config))},120000);pendingOffline.set(key,timer)}
+  }
+ }
+}
+
 client.on(Events.PresenceUpdate,(oldPresence,newPresence)=>{
  const config=settings.get(newPresence.guild.id);if(!config?.discord_presence_enabled)return;
  const member=newPresence.member;if(!member||!member.roles.cache.has(config.creator_role_id))return;
@@ -48,7 +62,7 @@ client.on(Events.PresenceUpdate,(oldPresence,newPresence)=>{
  if(wasStreaming){const timer=setTimeout(()=>{pendingOffline.delete(key);void serial(key,()=>finishLive(member,config))},120000);pendingOffline.set(key,timer)}
 });
 
-client.once(Events.ClientReady,async ready=>{console.log(`[ready] ${ready.user.tag} is online.`);await loadSettings();setInterval(()=>void loadSettings(),60000).unref()});
+client.once(Events.ClientReady,async ready=>{console.log(`[ready] ${ready.user.tag} is online.`);await loadSettings();await reconcileAll();setInterval(()=>void loadSettings(),60000).unref();setInterval(()=>void reconcileAll(),30000).unref()});
 client.on(Events.Error,error=>console.error('[discord]',error));
 process.on('unhandledRejection',error=>console.error('[unhandled]',error));
 await client.login(discordToken);
