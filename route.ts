@@ -1,58 +1,12 @@
-import { desc } from "drizzle-orm";
-import { getDb } from "../../../../../db";
-import { notes } from "../../../db/schema";
+import {z} from 'zod';
+import {createClient} from '@/lib/supabase/server';
 
-function toRouteErrorMessage(error: unknown) {
-  const message = error instanceof Error ? error.message : "Unexpected error";
-  const detail =
-    error instanceof Error && error.cause instanceof Error ? error.cause.message : "";
-  const combined = `${message}\n${detail}`;
+const ownerDefault='# {streamer} is now live!\n{streamer} is streaming {game} on {platform}.\nThey brought their trusty {random_companion}!\nCome and say hello\n{url}';
+const creatorDefault='# {streamer} is now live!\nStreaming {game} on {platform}.\nCome and say hello\n{url}';
+const schema=z.object({guildId:z.string().min(1).max(30),guildName:z.string().trim().min(1).max(100),creatorRoleId:z.string().min(1).max(30),creatorRoleName:z.string().trim().min(1).max(100),liveRoleId:z.string().min(1).max(30),liveRoleName:z.string().trim().min(1).max(100),alertChannelId:z.string().min(1).max(30),alertChannelName:z.string().trim().min(1).max(100),ownerAlertChannelId:z.string().max(30).default(''),ownerAlertChannelName:z.string().trim().max(100).default(''),ownerEveryoneEnabled:z.boolean().default(true),ownerMessageTemplate:z.string().trim().min(1).max(1800).default(ownerDefault),creatorMessageTemplate:z.string().trim().min(1).max(1800).default(creatorDefault),discordPresenceEnabled:z.boolean().default(true),platformConfirmationEnabled:z.boolean().default(true),deleteExpiredAlert:z.boolean().default(true)}).refine(value=>value.creatorRoleId!==value.liveRoleId,{message:'Choose two different roles.',path:['liveRoleId']});
+const json=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
+async function account(){const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();return {supabase,user}}
+const output=(row:Record<string,unknown>)=>({guildId:row.guild_id,guildName:row.guild_name,creatorRoleId:row.creator_role_id,creatorRoleName:row.creator_role_name,liveRoleId:row.live_role_id,liveRoleName:row.live_role_name,alertChannelId:row.alert_channel_id,alertChannelName:row.alert_channel_name,ownerAlertChannelId:row.owner_alert_channel_id||'',ownerAlertChannelName:row.owner_alert_channel_name||'',ownerEveryoneEnabled:row.owner_everyone_enabled!==false,ownerMessageTemplate:row.owner_message_template||ownerDefault,creatorMessageTemplate:row.creator_message_template||creatorDefault,discordPresenceEnabled:row.discord_presence_enabled,platformConfirmationEnabled:row.platform_confirmation_enabled,deleteExpiredAlert:row.delete_expired_alert,updatedAt:row.updated_at});
 
-  if (combined.includes("no such table") || combined.includes('from "notes"')) {
-    return "The notes table is unavailable. Generate the migration locally with `npm run db:generate`, then deploy so the platform can apply the generated SQL to the real D1 database.";
-  }
-
-  return message;
-}
-
-export async function GET() {
-  try {
-    const db = getDb();
-    const rows = await db
-      .select()
-      .from(notes)
-      .orderBy(desc(notes.createdAt), desc(notes.id))
-      .limit(20);
-
-    return Response.json({ notes: rows });
-  } catch (error) {
-    return Response.json(
-      { error: toRouteErrorMessage(error) },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request: Request) {
-  try {
-    const payload = (await request.json()) as {
-      title?: string;
-      content?: string;
-    };
-    const title = payload.title?.trim() ?? "";
-    const content = payload.content?.trim() ?? "";
-
-    if (!title) {
-      return Response.json({ error: "title is required" }, { status: 400 });
-    }
-
-    const db = getDb();
-    const [note] = await db.insert(notes).values({ title, content }).returning();
-    return Response.json({ note }, { status: 201 });
-  } catch (error) {
-    return Response.json(
-      { error: toRouteErrorMessage(error) },
-      { status: 500 }
-    );
-  }
-}
+export async function GET(request:Request){const {supabase,user}=await account();if(!user)return json({error:'Sign in to view live-role settings.'},401);const guildId=new URL(request.url).searchParams.get('guildId');if(!guildId)return json({settings:null});const {data,error}=await supabase.from('discord_live_settings').select('*').eq('user_id',user.id).eq('guild_id',guildId).maybeSingle();if(error)return json({error:'Could not load live-role settings.'},500);return json({settings:data?output(data):null})}
+export async function PUT(request:Request){const {supabase,user}=await account();if(!user)return json({error:'Sign in to save live-role settings.'},401);const parsed=schema.safeParse(await request.json());if(!parsed.success)return json({error:parsed.error.issues[0]?.message||'Check your live-role settings.'},400);const value=parsed.data;const {data,error}=await supabase.from('discord_live_settings').upsert({user_id:user.id,guild_id:value.guildId,guild_name:value.guildName,creator_role_id:value.creatorRoleId,creator_role_name:value.creatorRoleName,live_role_id:value.liveRoleId,live_role_name:value.liveRoleName,alert_channel_id:value.alertChannelId,alert_channel_name:value.alertChannelName,owner_alert_channel_id:value.ownerAlertChannelId||value.alertChannelId,owner_alert_channel_name:value.ownerAlertChannelName||value.alertChannelName,owner_everyone_enabled:value.ownerEveryoneEnabled,owner_message_template:value.ownerMessageTemplate,creator_message_template:value.creatorMessageTemplate,discord_presence_enabled:value.discordPresenceEnabled,platform_confirmation_enabled:value.platformConfirmationEnabled,delete_expired_alert:value.deleteExpiredAlert,updated_at:new Date().toISOString()},{onConflict:'user_id,guild_id'}).select('*').single();if(error)return json({error:'Could not save live-role settings.'},500);return json({settings:output(data)})}
