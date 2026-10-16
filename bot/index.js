@@ -9,6 +9,7 @@ if(!discordToken)throw new Error('DISCORD_BOT_TOKEN or DISCORD_TOKEN is required
 const supabase=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMembers,GatewayIntentBits.GuildPresences]});
 const settings=new Map();const pendingOffline=new Map();const memberQueues=new Map();
+const trustyCompanions=['platypus','rubber duck','tiny dinosaur','spatula','traffic cone','emotional-support potato','garden gnome','squeaky hammer','capybara','battle spoon','penguin','glittery cactus'];
 
 function isStreaming(presence){return Boolean(presence?.activities?.some(activity=>activity.type===ActivityType.Streaming));}
 function streamActivity(presence){return presence?.activities?.find(activity=>activity.type===ActivityType.Streaming);}
@@ -26,8 +27,9 @@ async function goLive(member,presence,config){
  if(!member.roles.cache.has(config.creator_role_id)||member.roles.cache.has(config.live_role_id))return;
  const role=member.guild.roles.cache.get(config.live_role_id);if(!role?.editable){console.warn(`[roles] Cannot manage ${config.live_role_name} in ${member.guild.name}.`);return}
  await member.roles.add(role,'B.E.I.P.I. detected Discord Streaming activity');
- const channel=member.guild.channels.cache.get(config.alert_channel_id);let message=null;const activity=streamActivity(presence);
- if(channel?.isTextBased())message=await channel.send({content:`# ${member.displayName} is now live!\nCome and say hello${activity?.url?`\n${activity.url}`:' 💜'}`,allowedMentions:{parse:[]}});
+ const isOwner=member.id===member.guild.ownerId;const channelId=isOwner&&config.owner_alert_channel_id?config.owner_alert_channel_id:config.alert_channel_id;const channel=member.guild.channels.cache.get(channelId);let message=null;const activity=streamActivity(presence);const trusty=trustyCompanions[Math.floor(Math.random()*trustyCompanions.length)];
+ const content=isOwner?`${config.owner_everyone_enabled?'@everyone\n':''}# ${member.displayName} is now live!\n${member.displayName} has their trusty ${trusty}!\nCome and say hello${activity?.url?`\n${activity.url}`:' 💜'}`:`# ${member.displayName} is now live!\nCome and say hello${activity?.url?`\n${activity.url}`:' 💜'}`;
+ if(channel?.isTextBased())message=await channel.send({content,allowedMentions:{parse:isOwner&&config.owner_everyone_enabled?['everyone']:[]}});
  const {error}=await supabase.from('discord_live_events').upsert({guild_id:member.guild.id,member_id:member.id,message_id:message?.id||null,channel_id:channel?.id||config.alert_channel_id,started_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:'guild_id,member_id'});
  if(error)console.error('[live-event]',error.message);console.log(`[live] ${member.user.tag} in ${member.guild.name}`);
 }
