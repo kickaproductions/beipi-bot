@@ -1,8 +1,10 @@
 import {ActivityType,Client,Events,GatewayIntentBits} from 'discord.js';
 import {createClient} from '@supabase/supabase-js';
 
-const required=['DISCORD_BOT_TOKEN','SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY'];
+const discordToken=process.env.DISCORD_BOT_TOKEN||process.env.DISCORD_TOKEN;
+const required=['SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY'];
 for(const name of required)if(!process.env[name])throw new Error(`${name} is required.`);
+if(!discordToken)throw new Error('DISCORD_BOT_TOKEN or DISCORD_TOKEN is required.');
 
 const supabase=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMembers,GatewayIntentBits.GuildPresences]});
@@ -49,4 +51,4 @@ client.on(Events.PresenceUpdate,(oldPresence,newPresence)=>{
 client.once(Events.ClientReady,async ready=>{console.log(`[ready] ${ready.user.tag} is online.`);await loadSettings();setInterval(()=>void loadSettings(),60000).unref()});
 client.on(Events.Error,error=>console.error('[discord]',error));
 process.on('unhandledRejection',error=>console.error('[unhandled]',error));
-await client.login(process.env.DISCORD_BOT_TOKEN);
+await client.login(discordToken);
