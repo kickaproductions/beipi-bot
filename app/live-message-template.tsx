@@ -19,10 +19,11 @@ const sample:Record<string,string>={streamer:'Kickaa',title:'Chaos, quests and q
 function InlinePreview({text}:{text:string}){
  const pieces=[];let cursor=0,key=0;
  while(cursor<text.length){
-  const rest=text.slice(cursor);let match:RegExpMatchArray|null=null;let kind:''|'bold'|'underline'|'italic'='';
-  for(const [type,pattern] of [['bold',/^\*\*(.+?)\*\*/],['underline',/^__(.+?)__/],['italic',/^\*(.+?)\*/]] as const){const found=rest.match(pattern);if(found){match=found;kind=type;break}}
-  if(match){const content=match[1];pieces.push(kind==='bold'?<strong key={key++}>{content}</strong>:kind==='underline'?<u key={key++}>{content}</u>:<em key={key++}>{content}</em>);cursor+=match[0].length;continue}
-  const nextMarkers=[rest.indexOf('**',1),rest.indexOf('__',1),rest.indexOf('*',1)].filter(position=>position>0);const length=nextMarkers.length?Math.min(...nextMarkers):rest.length;pieces.push(rest.slice(0,length));cursor+=length;
+  const rest=text.slice(cursor);let match:RegExpMatchArray|null=null;let kind='';
+  const patterns:[string,RegExp][]=[['underline-bold-italic',/^__\*\*\*(.+?)\*\*\*__/],['bold-italic',/^\*\*\*(.+?)\*\*\*/],['underline-bold',/^__\*\*(.+?)\*\*__/],['underline-italic',/^__\*(.+?)\*__/],['bold',/^\*\*(.+?)\*\*/],['underline',/^__(.+?)__/],['italic',/^\*(.+?)\*/]];
+  for(const [type,pattern] of patterns){const found=rest.match(pattern);if(found){match=found;kind=type;break}}
+  if(match){const content=match[1],item=kind==='underline-bold-italic'?<u key={key++}><strong><em>{content}</em></strong></u>:kind==='bold-italic'?<strong key={key++}><em>{content}</em></strong>:kind==='underline-bold'?<u key={key++}><strong>{content}</strong></u>:kind==='underline-italic'?<u key={key++}><em>{content}</em></u>:kind==='bold'?<strong key={key++}>{content}</strong>:kind==='underline'?<u key={key++}>{content}</u>:<em key={key++}>{content}</em>;pieces.push(item);cursor+=match[0].length;continue}
+  const nextMarkers=[rest.indexOf('***',1),rest.indexOf('**',1),rest.indexOf('__',1),rest.indexOf('*',1)].filter(position=>position>0);const length=nextMarkers.length?Math.min(...nextMarkers):rest.length;pieces.push(rest.slice(0,length));cursor+=length;
  }
  return <>{pieces}</>;
 }
