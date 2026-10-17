@@ -9,10 +9,22 @@ if(!discordToken)throw new Error('DISCORD_BOT_TOKEN or DISCORD_TOKEN is required
 const supabase=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMembers,GatewayIntentBits.GuildPresences]});
 const settings=new Map();const pendingOffline=new Map();const memberQueues=new Map();
-const trustyCompanions=['platypus','rubber duck','tiny dinosaur','spatula','traffic cone','emotional-support potato','garden gnome','squeaky hammer','capybara','battle spoon','penguin','glittery cactus'];
+const randomItems=['rubber duck','spatula','traffic cone','emotional-support potato','garden gnome','squeaky hammer','battle spoon','glittery cactus','enchanted teacup','questionable wizard hat'];
+const randomAnimals=['platypus','capybara','penguin','red panda','axolotl','wombat','quokka','tiny goose','sleepy fox','chaotic raccoon'];
+const randomDinosaurs=['tiny triceratops','pocket velociraptor','baby stegosaurus','sparkly brachiosaurus','sleepy ankylosaurus','dramatic T-Rex'];
+const pick=list=>list[Math.floor(Math.random()*list.length)];
+const ownerDefault='# {streamer} is now live!\n{streamer} is streaming {game} on {platform}.\nThey brought their trusty {random_companion}!\nCome and say hello\n{url}';
+const creatorDefault='# {streamer} is now live!\nStreaming {game} on {platform}.\nCome and say hello\n{url}';
+
+async function syncGuild(guild,active=true){
+ const payload={guild_id:guild.id,guild_name:guild.name,owner_discord_id:guild.ownerId,member_count:guild.memberCount||0,bot_active:active,last_seen_at:new Date().toISOString(),removed_at:active?null:new Date().toISOString()};
+ const {error}=await supabase.from('discord_guild_registry').upsert(payload,{onConflict:'guild_id'});
+ if(error)console.error('[guild-registry]',guild.name,error.message);
+}
 
 function isStreaming(presence){return Boolean(presence?.activities?.some(activity=>activity.type===ActivityType.Streaming));}
 function streamActivity(presence){return presence?.activities?.find(activity=>activity.type===ActivityType.Streaming);}
+function renderTemplate(template,member,activity){const item=pick(randomItems),animal=pick(randomAnimals),dinosaur=pick(randomDinosaurs),values={streamer:member.displayName,title:activity?.details||activity?.state||'A new adventure',game:activity?.state||activity?.details||'something exciting',platform:activity?.name||'their stream',url:activity?.url||'',server:member.guild.name,random_item:item,random_animal:animal,random_dinosaur:dinosaur,random_companion:pick([item,animal,dinosaur])};return (template||creatorDefault).replace(/\{([a-z_]+)\}/g,(match,key)=>values[key]??match).replace(/\n{3,}/g,'\n\n').trim().slice(0,1950)}
 
 async function loadSettings(){
  const {data,error}=await supabase.from('discord_live_settings').select('*');
@@ -27,8 +39,8 @@ async function goLive(member,presence,config){
  if(!member.roles.cache.has(config.creator_role_id)||member.roles.cache.has(config.live_role_id))return;
  const role=member.guild.roles.cache.get(config.live_role_id);if(!role?.editable){console.warn(`[roles] Cannot manage ${config.live_role_name} in ${member.guild.name}.`);return}
  await member.roles.add(role,'B.E.I.P.I. detected Discord Streaming activity');
- const isOwner=member.id===member.guild.ownerId;const channelId=isOwner&&config.owner_alert_channel_id?config.owner_alert_channel_id:config.alert_channel_id;const channel=member.guild.channels.cache.get(channelId);let message=null;const activity=streamActivity(presence);const trusty=trustyCompanions[Math.floor(Math.random()*trustyCompanions.length)];
- const content=isOwner?`${config.owner_everyone_enabled?'@everyone\n':''}# ${member.displayName} is now live!\n${member.displayName} has their trusty ${trusty}!\nCome and say hello${activity?.url?`\n${activity.url}`:' 💜'}`:`# ${member.displayName} is now live!\nCome and say hello${activity?.url?`\n${activity.url}`:' 💜'}`;
+ const isOwner=member.id===member.guild.ownerId;const channelId=isOwner&&config.owner_alert_channel_id?config.owner_alert_channel_id:config.alert_channel_id;const channel=member.guild.channels.cache.get(channelId);let message=null;const activity=streamActivity(presence);
+ const template=isOwner?(config.owner_message_template||ownerDefault):(config.creator_message_template||creatorDefault);const rendered=renderTemplate(template,member,activity);const content=isOwner&&config.owner_everyone_enabled?`@everyone\n${rendered}`:rendered;
  if(channel?.isTextBased())message=await channel.send({content,allowedMentions:{parse:isOwner&&config.owner_everyone_enabled?['everyone']:[]}});
  const {error}=await supabase.from('discord_live_events').upsert({guild_id:member.guild.id,member_id:member.id,message_id:message?.id||null,channel_id:channel?.id||config.alert_channel_id,started_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:'guild_id,member_id'});
  if(error)console.error('[live-event]',error.message);console.log(`[live] ${member.user.tag} in ${member.guild.name}`);
@@ -64,7 +76,9 @@ client.on(Events.PresenceUpdate,(oldPresence,newPresence)=>{
  if(wasStreaming){const timer=setTimeout(()=>{pendingOffline.delete(key);void serial(key,()=>finishLive(member,config))},120000);pendingOffline.set(key,timer)}
 });
 
-client.once(Events.ClientReady,async ready=>{console.log(`[ready] ${ready.user.tag} is online.`);await loadSettings();await reconcileAll();setInterval(()=>void loadSettings(),60000).unref();setInterval(()=>void reconcileAll(),30000).unref()});
+client.once(Events.ClientReady,async ready=>{console.log(`[ready] ${ready.user.tag} is online.`);await Promise.all([...ready.guilds.cache.values()].map(guild=>syncGuild(guild)));await loadSettings();await reconcileAll();setInterval(()=>void loadSettings(),60000).unref();setInterval(()=>void reconcileAll(),30000).unref();setInterval(()=>void Promise.all([...client.guilds.cache.values()].map(guild=>syncGuild(guild))),300000).unref()});
+client.on(Events.GuildCreate,guild=>void syncGuild(guild));
+client.on(Events.GuildDelete,guild=>void syncGuild(guild,false));
 client.on(Events.Error,error=>console.error('[discord]',error));
 process.on('unhandledRejection',error=>console.error('[unhandled]',error));
 await client.login(discordToken);
