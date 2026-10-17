@@ -6,7 +6,7 @@ export const metadata={title:'Developer Portal · B.E.I.P.I.'};
 export const dynamic='force-dynamic';
 
 const areas=[
-  {title:'Accounts',copy:'View registered B.E.I.P.I. accounts and access levels.',icon:Users,status:'Ready for data'},
+  {title:'Accounts',copy:'View registered accounts and manage developer, tester and launch access.',icon:Users,status:'Open account management',href:'/developer/accounts'},
   {title:'Connections',copy:'See connection health across Twitch, Discord, Google and Kick.',icon:Link2,status:'Foundation ready'},
   {title:'Discord servers',copy:'Monitor installed communities and server setup health.',icon:Server,status:'Coming next'},
   {title:'Analytics',copy:'Understand account growth, platform mix and traffic sources.',icon:BarChart3,status:'Coming next'},
