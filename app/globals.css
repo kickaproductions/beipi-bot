@@ -218,3 +218,111 @@
 .account-admin-card.suspended{border-color:#71404a}.account-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:15px}.account-badges span{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border:1px solid #54425f;border-radius:999px;background:#2a2132;color:#d0c2d7;font-size:.63rem;font-weight:750}.account-badges span.developer{border-color:#795f8b;color:#e0c9ee}.account-badges span.suspended{border-color:#77404b;background:#40262e;color:#ffc1ca}.account-suspension-note{display:flex;gap:9px;padding:11px 12px;margin:0 0 14px;border:1px solid #71404a;border-radius:10px;background:#43252d;color:#ffc6cf}.account-suspension-note b,.account-suspension-note span{display:block}.account-suspension-note span{font-size:.7rem;margin-top:3px}.account-details-toggle{width:100%;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:14px;padding:9px;border-top:1px solid #392e42;color:#cbb9d5;font-size:.72rem}.account-details{display:grid;gap:16px;margin-top:5px;padding:14px;border:1px solid #3d3046;border-radius:12px;background:#19141f}.account-details h3{display:flex;align-items:center;gap:7px;margin:0 0 10px;color:#d0b8e3;font-size:.78rem}.account-server-list,.account-audit-list{display:grid;gap:8px}.account-server-list article,.account-audit-list article{position:relative;padding:10px;border:1px solid #392d42;border-radius:9px;background:#211a29}.account-server-list b,.account-server-list small,.account-audit-list b,.account-audit-list span{display:block}.account-server-list small,.account-audit-list span{color:#8f8297;font-size:.64rem;margin-top:3px}.account-server-list>article>span{position:absolute;right:9px;top:9px;padding:3px 6px;border-radius:999px;background:#244032;color:#bce4ca;font-size:.57rem}.account-server-list>article>span.removed{background:#3f2930;color:#ddaab2}.account-server-list p,.account-audit-list p{color:#a99daf;font-size:.67rem;margin-top:7px}.account-detail-empty{color:#887c8e;font-size:.72rem}.account-admin-actions{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-top:13px}.account-admin-actions button,.account-admin-actions select{min-height:40px;border-radius:8px;font-size:.7rem}.account-admin-actions select{padding:0 9px;border:1px solid #4a3a55;background:#17131c;color:#cfc3d4}.account-admin-actions .danger,.account-admin-actions .restore{display:flex;align-items:center;justify-content:center;gap:6px;padding:0 11px;border:1px solid #71404a;background:#43252d;color:#ffc6cf}.account-admin-actions .restore{border-color:#31594a;background:#203a31;color:#bce7ce}.account-admin-actions .danger.ghost{grid-column:1/-1;background:transparent}.account-admin-actions>.primary{margin:0;width:auto}.account-admin-card>header>.account-role{display:none}
 @media(max-width:700px){.account-admin-actions{grid-template-columns:1fr}.account-admin-actions .danger.ghost{grid-column:auto}.account-admin-actions>button,.account-admin-actions>select{width:100%}}
 .account-badges button{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border:1px solid #54425f;border-radius:999px;background:#221b29;color:#998ba2;font-size:.63rem;font-weight:750}.account-badges button:hover{border-color:#8e70a2;color:#d9c6e4}.account-badges button.selected{background:#2a2132;color:#d0c2d7}.account-admin-controls.compact{display:block}.account-admin-controls.compact>label:first-child{display:grid}
+
+/* Readable account management */
+.accounts-shell{--account-secondary:#c4b9ca;--account-tertiary:#aaa0b0}
+.accounts-shell .developer-heading p{color:var(--account-secondary);font-size:1rem}
+.accounts-shell .account-admin-stats span{color:var(--account-secondary);font-size:.85rem}
+.accounts-shell .account-admin-tools>label{height:50px;color:var(--account-secondary)}
+.accounts-shell .account-admin-tools input{font-size:1rem}
+.accounts-shell .account-admin-tools input::placeholder{color:#aaa0b0;opacity:1}
+.accounts-shell .account-admin-tools button{padding:9px 14px;color:#c4b9ca;font-size:.84rem}
+.accounts-shell .account-admin-card h2{font-size:1.12rem}
+.accounts-shell .account-admin-card h2 small{font-size:.7rem}
+.accounts-shell .account-admin-card header p{color:var(--account-secondary);font-size:.84rem}
+.accounts-shell .account-admin-meta{color:var(--account-secondary);font-size:.8rem;line-height:1.55}
+.accounts-shell .account-admin-controls>label:first-child{font-size:.86rem}
+.accounts-shell .account-admin-controls select{font-size:.9rem}
+.accounts-shell .account-badges span,.accounts-shell .account-badges button{padding:6px 10px;color:#d7ccdD;font-size:.76rem}
+.accounts-shell .account-badges button:not(.selected){color:#c3b7c9}
+.accounts-shell .account-details-toggle{font-size:.84rem}
+.accounts-shell .account-details h3{font-size:.92rem}
+.accounts-shell .account-server-list b,.accounts-shell .account-audit-list b{font-size:.88rem}
+.accounts-shell .account-server-list small,.accounts-shell .account-audit-list span{color:var(--account-tertiary);font-size:.75rem;line-height:1.5}
+.accounts-shell .account-server-list p,.accounts-shell .account-audit-list p{color:var(--account-secondary);font-size:.78rem;line-height:1.55}
+.accounts-shell .account-server-list>article>span{font-size:.68rem}
+.accounts-shell .account-detail-empty{color:var(--account-secondary);font-size:.82rem}
+.accounts-shell .account-admin-actions button,.accounts-shell .account-admin-actions select{min-height:44px;font-size:.82rem}
+.accounts-shell .account-suspension-note span{font-size:.8rem;line-height:1.5}
+
+/* Site-wide readability and contrast */
+body{font-size:16px}
+.shell{--muted:#706779}
+.dark-theme{--muted:#d7ccdd}
+.shell .brand small{font-size:.75rem;color:var(--muted)}
+.shell .workspace strong{font-size:.9rem}
+.shell .workspace small{font-size:.75rem;color:var(--muted)}
+.shell .nav-label{font-size:.72rem;color:var(--muted)}
+.shell nav button{font-size:.94rem;min-height:46px}
+.shell .count,.shell .soon{font-size:.7rem}
+.shell .sidebar-note p{font-size:.82rem;line-height:1.55}
+.shell .profile strong{font-size:.9rem}
+.shell .profile small,.shell .profile a{font-size:.72rem;color:var(--muted)}
+.shell .crumb{font-size:.82rem;color:var(--muted)}
+.shell .quiet{font-size:.84rem;min-height:40px}
+.shell .eyebrow{font-size:.72rem;color:var(--muted)}
+.shell .page-heading p{font-size:.94rem;color:var(--muted)}
+.shell .primary,.shell .outline,.shell .hero-button{font-size:.88rem;min-height:42px}
+.shell .pill{font-size:.72rem}
+.shell .hero p{font-size:.94rem;color:var(--muted)}
+.shell .mascot span{font-size:.78rem}
+.shell .stats div>span{font-size:.8rem;color:var(--muted)}
+.shell .card-heading h2{font-size:1.1rem}
+.shell .card-heading p{font-size:.84rem;color:var(--muted)}
+.shell .text-button{font-size:.8rem}
+.shell .empty p{font-size:.84rem;color:var(--muted)}
+.shell .empty button{font-size:.8rem}
+.shell .connection-strip p{font-size:.8rem;color:var(--muted)}
+.shell .connection-strip .outline{font-size:.8rem}
+.shell footer{font-size:.72rem;color:var(--muted)}
+.shell .item strong{font-size:.9rem}
+.shell .item p{font-size:.84rem;color:var(--muted)}
+.shell .item small,.shell .subtle{font-size:.74rem;color:var(--muted)}
+.shell .tabs button{font-size:.78rem}
+.shell .checklist-summary{font-size:.84rem}
+.shell .platform p{font-size:.9rem;color:var(--muted)}
+.shell .platform button,.shell .platform-connect{font-size:.84rem}
+.shell .platform>small,.shell .status{font-size:.72rem}
+.shell .notice p{font-size:.9rem}
+.shell .modal>p{font-size:.9rem;color:var(--muted)}
+.shell .modal label,.shell .form-fields>label,.shell .field-label{font-size:.88rem}
+.shell .modal input,.shell .modal textarea,.shell .form-fields input,.shell .form-fields select,.shell .form-fields textarea{font-size:.94rem}
+.shell .modal label>small,.shell .form-fields small{font-size:.78rem;color:var(--muted)}
+.shell .discord-section-button strong{font-size:.94rem}
+.shell .discord-section-button small{font-size:.78rem;color:var(--muted)}
+.shell .discord-section-intro>span{font-size:.72rem}
+.shell .discord-section-intro p{font-size:.88rem;color:var(--muted)}
+.shell .draft-count,.shell .required-note{font-size:.72rem}
+.shell .live-role-grid>label,.shell .live-options strong{font-size:.88rem}
+.shell .live-options small{font-size:.76rem;color:var(--muted)}
+.shell .live-template-heading span,.shell .live-template>small{font-size:.76rem;color:var(--muted)}
+
+.landing-shell{--landing-muted:#d1c7d8;font-size:16px}
+.landing-trust span,.landing-footer{font-size:.86rem;color:var(--landing-muted)}
+.landing-features p,.landing-promise-list p{font-size:1rem}
+.landing-login>small,.landing-divider{color:#b9adc2}
+
+.account-shell{--account-muted:#d0c5d5;font-size:16px}
+.account-brand small,.account-lead,.account-state p,.account-switch{font-size:.94rem}
+.account-kicker{font-size:.78rem}
+.account-divider{color:#b4a8bb;font-size:.82rem}
+.account-card label{font-size:.9rem}
+.account-card input{font-size:1rem}
+.account-trust,.account-footer{color:#b6aabd;font-size:.86rem}
+
+.tester-shell,.developer-shell{font-size:16px}
+.tester-shell{--tester-muted:#d0c5d5}
+.tester-card-heading p,.tester-form label,.feedback-review-controls label{font-size:.9rem}
+.tester-upload small{color:#b7abbf}
+.tester-note p{font-size:.94rem}
+.tester-report-list strong{font-size:.96rem}
+.tester-report-list p{color:#c2b7c8;font-size:.84rem}
+.tester-report-list small{color:#aaa0b0;font-size:.76rem}
+.tester-report-list a,.tester-report-list blockquote{font-size:.84rem}
+.tester-status{font-size:.7rem}
+.developer-grid .developer-area-link p{color:#c9becf;font-size:.94rem}
+.developer-grid .developer-area-link small{font-size:.84rem}
+.feedback-filters button{color:#c9becf;font-size:.84rem}
+.feedback-review-card time{color:#aaa0b0;font-size:.78rem}
+.feedback-compare b{font-size:.78rem}
+.feedback-compare p{color:#c9becf;font-size:.9rem}
