@@ -8,7 +8,7 @@ if(!discordToken)throw new Error('DISCORD_BOT_TOKEN or DISCORD_TOKEN is required
 
 const supabase=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMembers,GatewayIntentBits.GuildPresences]});
-const settings=new Map();const pendingOffline=new Map();const memberQueues=new Map();const activityCooldown=new Map();
+const settings=new Map();const pendingOffline=new Map();const memberQueues=new Map();const activityCooldown=new Map();const activityCleanup=new Map();
 const randomItems=['rubber duck','spatula','traffic cone','emotional-support potato','garden gnome','squeaky hammer','battle spoon','glittery cactus','enchanted teacup','questionable wizard hat'];
 const randomAnimals=['platypus','capybara','penguin','red panda','axolotl','wombat','quokka','tiny goose','sleepy fox','chaotic raccoon'];
 const randomDinosaurs=['tiny triceratops','pocket velociraptor','baby stegosaurus','sparkly brachiosaurus','sleepy ankylosaurus','dramatic T-Rex'];
@@ -25,6 +25,8 @@ async function logActivity(guildId,eventType,severity,title,detail='',metadata={
  activityCooldown.set(cooldownKey,now);
  const {error}=await supabase.from('discord_server_activity').insert(payload);
  if(error)console.error('[activity-log]',error.message);
+ const lastCleanup=activityCleanup.get(guildId)||0;
+ if(now-lastCleanup>3600000){activityCleanup.set(guildId,now);const cutoff=new Date(now-30*24*60*60*1000).toISOString();const {error:cleanupError}=await supabase.from('discord_server_activity').delete().eq('guild_id',guildId).lt('created_at',cutoff);if(cleanupError)console.error('[activity-cleanup]',cleanupError.message)}
 }
 
 async function syncGuild(guild,active=true){
