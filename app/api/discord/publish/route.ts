@@ -43,26 +43,32 @@ export async function POST(request:NextRequest){
       channelId=created.id;channelName=created.name;
     }
     if(!channelId)return json({error:'Choose an existing Discord channel first.'},400);
-    let body:BodyInit;const headers:Record<string,string>={Authorization:`Bot ${botToken}`};
+    const headers:Record<string,string>={Authorization:`Bot ${botToken}`};let headerMessageId:string|undefined;
     if(draft.bannerId){
       const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)return json({error:'Sign in again before publishing.'},401);
       const {data:banner}=await supabase.from('discord_banners').select('storage_path,file_name,mime_type').eq('id',draft.bannerId).eq('user_id',user.id).maybeSingle();if(!banner)return json({error:'That banner could not be found. Upload it again.'},404);
       const {data:file,error:fileError}=await supabase.storage.from('discord-banners').download(banner.storage_path);if(fileError||!file)return json({error:'That banner file could not be loaded.'},404);
-      const attachment={id:0,filename:banner.file_name,...(draft.bannerAlt?{description:draft.bannerAlt}:{})};const form=new FormData();form.set('payload_json',JSON.stringify({content:draft.text,attachments:[attachment]}));form.set('files[0]',new Blob([await file.arrayBuffer()],{type:banner.mime_type}),banner.file_name);body=form;
-    }else{headers['Content-Type']='application/json';body=JSON.stringify({content:draft.text})}
-    const sendResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages`,{method:'POST',headers,body,cache:'no-store'});
-    const sent=await sendResponse.json() as {id?:string;message?:string};
-    if(!sendResponse.ok||!sent.id)return json({error:sent.message||'B.E.I.P.I. could not publish there. Check her channel permissions.'},sendResponse.status||502);
+      const attachment={id:0,filename:banner.file_name};const form=new FormData();form.set('payload_json',JSON.stringify({attachments:[attachment]}));form.set('files[0]',new Blob([await file.arrayBuffer()],{type:banner.mime_type}),banner.file_name);
+      const bannerResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages`,{method:'POST',headers,body:form,cache:'no-store'});const bannerMessage=await bannerResponse.json() as {id?:string;message?:string};
+      if(!bannerResponse.ok||!bannerMessage.id)return json({error:bannerMessage.message||'B.E.I.P.I. could not publish the banner. Check her channel permissions.'},bannerResponse.status||502);headerMessageId=bannerMessage.id;
+    }
+    let sent:{id?:string;message?:string}={id:headerMessageId};
+    if(draft.text.trim()){
+      const sendResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages`,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({content:draft.text}),cache:'no-store'});sent=await sendResponse.json() as {id?:string;message?:string};
+      if(!sendResponse.ok||!sent.id){if(headerMessageId)await fetch(`https://discord.com/api/channels/${channelId}/messages/${headerMessageId}`,{method:'DELETE',headers}).catch(()=>{});return json({error:sent.message||'B.E.I.P.I. could not publish there. Check her channel permissions.'},sendResponse.status||502)}
+    }
+    if(!sent.id)return json({error:'Add a banner or some text before publishing.'},400);
+    const removePublished=async()=>{await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}`,{method:'DELETE',headers}).catch(()=>{});if(headerMessageId&&headerMessageId!==sent.id)await fetch(`https://discord.com/api/channels/${channelId}/messages/${headerMessageId}`,{method:'DELETE',headers}).catch(()=>{})};
     if(draft.type==='reaction'){
       const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)return json({error:'Sign in again before publishing.'},401);
       for(const reaction of draft.reactions){
         const reactionResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}/reactions/${encodeURIComponent(reaction.emoji)}/@me`,{method:'PUT',headers:{Authorization:`Bot ${botToken}`},cache:'no-store'});
-        if(!reactionResponse.ok){await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}`,{method:'DELETE',headers:{Authorization:`Bot ${botToken}`}}).catch(()=>{});return json({error:`Discord could not add ${reaction.emoji}. Use a standard emoji and check B.E.I.P.I.’s Add Reactions permission.`},400)}
+        if(!reactionResponse.ok){await removePublished();return json({error:`Discord could not add ${reaction.emoji}. Use a standard emoji and check B.E.I.P.I.’s Add Reactions permission.`},400)}
       }
       const {data:menu,error:menuError}=await supabase.from('discord_reaction_menus').insert({user_id:user.id,guild_id:draft.serverId,guild_name:draft.server,channel_id:channelId,channel_name:channelName,message_id:sent.id,title:draft.title,remove_on_unreact:draft.removeOnUnreact}).select('id').single();
-      if(menuError||!menu){await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}`,{method:'DELETE',headers:{Authorization:`Bot ${botToken}`}}).catch(()=>{});return json({error:'The reaction-role menu could not be saved. Run the latest Supabase migration, then try again.'},500)}
+      if(menuError||!menu){await removePublished();return json({error:'The reaction-role menu could not be saved. Run the latest Supabase migration, then try again.'},500)}
       const {error:itemError}=await supabase.from('discord_reaction_role_items').insert(draft.reactions.map(reaction=>({menu_id:menu.id,emoji:reaction.emoji,role_id:reaction.roleId!,role_name:reaction.role})));
-      if(itemError){await supabase.from('discord_reaction_menus').delete().eq('id',menu.id);await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}`,{method:'DELETE',headers:{Authorization:`Bot ${botToken}`}}).catch(()=>{});return json({error:'The reaction roles could not be saved. Please try again.'},500)}
+      if(itemError){await supabase.from('discord_reaction_menus').delete().eq('id',menu.id);await removePublished();return json({error:'The reaction roles could not be saved. Please try again.'},500)}
     }
     return json({ok:true,messageId:sent.id,channelId,channelName});
   }catch{return json({error:'Discord could not publish the message right now. Please try again.'},502)}
