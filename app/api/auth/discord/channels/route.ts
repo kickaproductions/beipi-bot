@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from 'next/server';
-import {decryptDiscordSession,DISCORD_SESSION_COOKIE,encryptDiscordSession,refreshDiscordSession} from '../session';
+import {DISCORD_SESSION_COOKIE,encryptDiscordSession,newestDiscordSession,refreshDiscordSession} from '../session';
 import {getPlatformConnection,savePlatformConnection} from '@/lib/platform-connections';
 
 export const runtime='nodejs';
@@ -9,10 +9,9 @@ type DiscordChannel={id:string;name:string;type:number;position:number;parent_id
 export async function GET(request:NextRequest){
   const guildId=request.nextUrl.searchParams.get('guildId');
   if(!guildId)return NextResponse.json({error:'Choose a Discord server first.'},{status:400});
-  let encrypted:string|undefined;
-  try{encrypted=(await getPlatformConnection('discord'))?.encrypted_session}catch{}
-  if(!encrypted)encrypted=request.cookies.get(DISCORD_SESSION_COOKIE)?.value;
-  let session=encrypted?decryptDiscordSession(encrypted):null;
+  const cookieSession=request.cookies.get(DISCORD_SESSION_COOKIE)?.value;let storedSession:string|undefined;
+  try{storedSession=(await getPlatformConnection('discord'))?.encrypted_session}catch{}
+  const selected=newestDiscordSession(cookieSession,storedSession);let encrypted=selected?.encrypted;let session=selected?.session||null;
   if(!session)return NextResponse.json({error:'Connect Discord before choosing a channel.'},{status:401});
   try{
     let guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'});

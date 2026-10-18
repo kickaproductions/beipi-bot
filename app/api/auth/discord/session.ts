@@ -34,6 +34,12 @@ export function decryptDiscordSession(value:string):DiscordSession|null{
   }catch{return null}
 }
 
+export function newestDiscordSession(...values:(string|undefined)[]){
+  return values.map(encrypted=>({encrypted,session:encrypted?decryptDiscordSession(encrypted):null}))
+    .filter((entry):entry is {encrypted:string;session:DiscordSession}=>Boolean(entry.encrypted&&entry.session))
+    .sort((a,b)=>b.session.expiresAt-a.session.expiresAt)[0]||null;
+}
+
 export function discordConfig(){
   const clientId=process.env.DISCORD_CLIENT_ID;
   const clientSecret=process.env.DISCORD_CLIENT_SECRET;
