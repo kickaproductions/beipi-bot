@@ -1,4 +1,4 @@
-import {ActivityType,Client,Events,GatewayIntentBits} from 'discord.js';
+import {ActivityType,Client,Events,GatewayIntentBits,Partials} from 'discord.js';
 import {createClient} from '@supabase/supabase-js';
 
 const discordToken=process.env.DISCORD_BOT_TOKEN||process.env.DISCORD_TOKEN;
@@ -7,7 +7,7 @@ for(const name of required)if(!process.env[name])throw new Error(`${name} is req
 if(!discordToken)throw new Error('DISCORD_BOT_TOKEN or DISCORD_TOKEN is required.');
 
 const supabase=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
-const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMembers,GatewayIntentBits.GuildPresences]});
+const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMembers,GatewayIntentBits.GuildPresences,GatewayIntentBits.GuildMessages,GatewayIntentBits.GuildMessageReactions],partials:[Partials.Message,Partials.Channel,Partials.Reaction]});
 const settings=new Map();const pendingOffline=new Map();const memberQueues=new Map();const activityCooldown=new Map();const activityCleanup=new Map();
 const randomItems=['rubber duck','spatula','traffic cone','emotional-support potato','garden gnome','squeaky hammer','battle spoon','glittery cactus','enchanted teacup','questionable wizard hat'];
 const randomAnimals=['platypus','capybara','penguin','red panda','axolotl','wombat','quokka','tiny goose','sleepy fox','chaotic raccoon'];
@@ -33,6 +33,21 @@ async function syncGuild(guild,active=true){
  const payload={guild_id:guild.id,guild_name:guild.name,owner_discord_id:guild.ownerId,member_count:guild.memberCount||0,bot_active:active,last_seen_at:new Date().toISOString(),removed_at:active?null:new Date().toISOString()};
  const {error}=await supabase.from('discord_guild_registry').upsert(payload,{onConflict:'guild_id'});
  if(error)console.error('[guild-registry]',guild.name,error.message);
+}
+
+const reactionKey=reaction=>reaction.emoji.id?`${reaction.emoji.name}:${reaction.emoji.id}`:reaction.emoji.name;
+async function handleReaction(reaction,user,adding){
+ if(user.bot)return;
+ try{
+  if(reaction.partial)await reaction.fetch();
+  const guild=reaction.message.guild;if(!guild)return;
+  const {data:item,error}=await supabase.from('discord_reaction_role_items').select('role_id,role_name,discord_reaction_menus!inner(message_id,remove_on_unreact,active)').eq('emoji',reactionKey(reaction)).eq('discord_reaction_menus.message_id',reaction.message.id).eq('discord_reaction_menus.active',true).maybeSingle();
+  if(error){console.error('[reaction-role]',error.message);return}if(!item)return;
+  const menu=Array.isArray(item.discord_reaction_menus)?item.discord_reaction_menus[0]:item.discord_reaction_menus;if(!adding&&!menu?.remove_on_unreact)return;
+  const member=await guild.members.fetch(user.id);const role=guild.roles.cache.get(item.role_id);
+  if(!role?.editable){await logActivity(guild.id,'reaction_role_error','warning','Reaction role could not be managed',`B.E.I.P.I. cannot manage ${item.role_name||'the selected role'}.`,{roleId:item.role_id,messageId:reaction.message.id});return}
+  if(adding)await member.roles.add(role,'B.E.I.P.I. reaction role');else await member.roles.remove(role,'B.E.I.P.I. reaction removed');
+ }catch(error){console.error('[reaction-role]',error);const guildId=reaction.message.guildId;if(guildId)await logActivity(guildId,'reaction_role_error','error','Reaction role update failed',error instanceof Error?error.message:'Discord rejected the role update.',{messageId:reaction.message.id})}
 }
 
 function isStreaming(presence){return Boolean(presence?.activities?.some(activity=>activity.type===ActivityType.Streaming));}
@@ -97,6 +112,8 @@ client.on(Events.PresenceUpdate,(oldPresence,newPresence)=>{
  if(streaming){const timer=pendingOffline.get(key);if(timer){clearTimeout(timer);pendingOffline.delete(key)}if(!wasStreaming)void serial(key,()=>goLive(member,newPresence,config));return}
  if(wasStreaming){const timer=setTimeout(()=>{pendingOffline.delete(key);void serial(key,()=>finishLive(member,config))},120000);pendingOffline.set(key,timer)}
 });
+client.on(Events.MessageReactionAdd,(reaction,user)=>void handleReaction(reaction,user,true));
+client.on(Events.MessageReactionRemove,(reaction,user)=>void handleReaction(reaction,user,false));
 
 client.once(Events.ClientReady,async ready=>{console.log(`[ready] ${ready.user.tag} is online.`);await Promise.all([...ready.guilds.cache.values()].map(async guild=>{await syncGuild(guild);await logActivity(guild.id,'bot_online','info','B.E.I.P.I. came online','The Discord worker connected successfully.') }));await loadSettings();await reconcileAll();setInterval(()=>void loadSettings(),60000).unref();setInterval(()=>void reconcileAll(),30000).unref();setInterval(()=>void Promise.all([...client.guilds.cache.values()].map(guild=>syncGuild(guild))),300000).unref()});
 client.on(Events.GuildCreate,guild=>void (async()=>{await syncGuild(guild);await logActivity(guild.id,'bot_joined','info','B.E.I.P.I. joined the server','The bot installation was registered.')})());

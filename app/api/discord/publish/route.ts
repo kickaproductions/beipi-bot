@@ -53,6 +53,17 @@ export async function POST(request:NextRequest){
     const sendResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages`,{method:'POST',headers,body,cache:'no-store'});
     const sent=await sendResponse.json() as {id?:string;message?:string};
     if(!sendResponse.ok||!sent.id)return json({error:sent.message||'B.E.I.P.I. could not publish there. Check her channel permissions.'},sendResponse.status||502);
+    if(draft.type==='reaction'){
+      const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)return json({error:'Sign in again before publishing.'},401);
+      for(const reaction of draft.reactions){
+        const reactionResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}/reactions/${encodeURIComponent(reaction.emoji)}/@me`,{method:'PUT',headers:{Authorization:`Bot ${botToken}`},cache:'no-store'});
+        if(!reactionResponse.ok){await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}`,{method:'DELETE',headers:{Authorization:`Bot ${botToken}`}}).catch(()=>{});return json({error:`Discord could not add ${reaction.emoji}. Use a standard emoji and check B.E.I.P.I.’s Add Reactions permission.`},400)}
+      }
+      const {data:menu,error:menuError}=await supabase.from('discord_reaction_menus').insert({user_id:user.id,guild_id:draft.serverId,guild_name:draft.server,channel_id:channelId,channel_name:channelName,message_id:sent.id,title:draft.title,remove_on_unreact:draft.removeOnUnreact}).select('id').single();
+      if(menuError||!menu){await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}`,{method:'DELETE',headers:{Authorization:`Bot ${botToken}`}}).catch(()=>{});return json({error:'The reaction-role menu could not be saved. Run the latest Supabase migration, then try again.'},500)}
+      const {error:itemError}=await supabase.from('discord_reaction_role_items').insert(draft.reactions.map(reaction=>({menu_id:menu.id,emoji:reaction.emoji,role_id:reaction.roleId!,role_name:reaction.role})));
+      if(itemError){await supabase.from('discord_reaction_menus').delete().eq('id',menu.id);await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}`,{method:'DELETE',headers:{Authorization:`Bot ${botToken}`}}).catch(()=>{});return json({error:'The reaction roles could not be saved. Please try again.'},500)}
+    }
     return json({ok:true,messageId:sent.id,channelId,channelName});
   }catch{return json({error:'Discord could not publish the message right now. Please try again.'},502)}
 }
