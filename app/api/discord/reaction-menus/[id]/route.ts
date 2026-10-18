@@ -1,0 +1,20 @@
+import {NextRequest} from 'next/server';
+import {createClient} from '@/lib/supabase/server';
+
+type DiscordRole={id:string;name:string;position:number;permissions:string;managed:boolean};
+type BotUser={id:string};type GuildMember={roles:string[]};
+export async function PATCH(request:NextRequest,{params}:{params:Promise<{id:string}>}){
+ const {id}=await params;const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)return Response.json({error:'Sign in to edit reaction roles.'},{status:401});
+ const body=await request.json() as {reactions?:{emoji?:string;roleId?:string;roleName?:string}[];removeOnUnreact?:boolean};const reactions=(body.reactions||[]).map(item=>({emoji:item.emoji?.trim()||'',roleId:item.roleId||'',roleName:item.roleName?.trim()||''}));
+ if(!reactions.length||reactions.length>20||reactions.some(item=>!item.emoji||!item.roleId||!item.roleName)||new Set(reactions.map(item=>item.emoji)).size!==reactions.length)return Response.json({error:'Choose one different emoji and Discord role for every row.'},{status:400});
+ const {data:menu,error:menuError}=await supabase.from('discord_reaction_menus').select('id,guild_id,channel_id,message_id,discord_reaction_role_items(emoji)').eq('id',id).eq('user_id',user.id).eq('active',true).maybeSingle();if(menuError||!menu)return Response.json({error:'That published menu could not be found.'},{status:404});
+ const token=process.env.DISCORD_BOT_TOKEN;if(!token)return Response.json({error:'B.E.I.P.I.’s bot token is not configured.'},{status:503});const headers={Authorization:`Bot ${token}`};
+ try{
+  const [rolesResponse,botResponse]=await Promise.all([fetch(`https://discord.com/api/guilds/${menu.guild_id}/roles`,{headers,cache:'no-store'}),fetch('https://discord.com/api/users/@me',{headers,cache:'no-store'})]);if(!rolesResponse.ok||!botResponse.ok)return Response.json({error:'B.E.I.P.I. could not verify those Discord roles.'},{status:502});
+  const roles=await rolesResponse.json() as DiscordRole[],bot=await botResponse.json() as BotUser;const memberResponse=await fetch(`https://discord.com/api/guilds/${menu.guild_id}/members/${bot.id}`,{headers,cache:'no-store'});if(!memberResponse.ok)return Response.json({error:'B.E.I.P.I. could not check her role position.'},{status:502});const member=await memberResponse.json() as GuildMember;const botTop=Math.max(0,...roles.filter(role=>member.roles.includes(role.id)).map(role=>role.position));const allowed=new Set(roles.filter(role=>!role.managed&&role.position<botTop).map(role=>role.id));if(reactions.some(item=>!allowed.has(item.roleId)))return Response.json({error:'One of those roles is above B.E.I.P.I. or cannot be managed.'},{status:400});
+  for(const old of menu.discord_reaction_role_items||[])await fetch(`https://discord.com/api/channels/${menu.channel_id}/messages/${menu.message_id}/reactions/${encodeURIComponent(old.emoji)}/@me`,{method:'DELETE',headers,cache:'no-store'}).catch(()=>{});
+  for(const item of reactions){const response=await fetch(`https://discord.com/api/channels/${menu.channel_id}/messages/${menu.message_id}/reactions/${encodeURIComponent(item.emoji)}/@me`,{method:'PUT',headers,cache:'no-store'});if(!response.ok)return Response.json({error:`Discord could not add ${item.emoji}. Try another standard emoji.`},{status:400})}
+  const {error:deleteError}=await supabase.from('discord_reaction_role_items').delete().eq('menu_id',menu.id);if(deleteError)throw deleteError;const {error:insertError}=await supabase.from('discord_reaction_role_items').insert(reactions.map(item=>({menu_id:menu.id,emoji:item.emoji,role_id:item.roleId,role_name:item.roleName})));if(insertError)throw insertError;const {error:updateError}=await supabase.from('discord_reaction_menus').update({remove_on_unreact:body.removeOnUnreact!==false,updated_at:new Date().toISOString()}).eq('id',menu.id).eq('user_id',user.id);if(updateError)throw updateError;
+  return Response.json({ok:true,reactions,removeOnUnreact:body.removeOnUnreact!==false});
+ }catch{return Response.json({error:'The published reaction-role menu could not be updated.'},{status:500})}
+}

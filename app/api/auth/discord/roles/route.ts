@@ -41,3 +41,24 @@ export async function GET(request:NextRequest){
     const response=NextResponse.json({roles:safe,botRoleReady:botTop>0},{headers:{'Cache-Control':'no-store'}});if(encrypted)response.cookies.set(DISCORD_SESSION_COOKIE,encrypted,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});return response;
   }catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Discord roles could not be loaded.'},{status:502})}
 }
+
+export async function POST(request:NextRequest){
+  const body=await request.json() as {guildId?:string;name?:string};
+  const guildId=body.guildId?.trim(),name=body.name?.trim();
+  if(!guildId||!name||name.length>100)return NextResponse.json({error:'Enter a role name up to 100 characters.'},{status:400});
+  const cookieSession=request.cookies.get(DISCORD_SESSION_COOKIE)?.value;let storedSession:string|undefined;
+  try{storedSession=(await getPlatformConnection('discord'))?.encrypted_session}catch{}
+  const selected=newestDiscordSession(cookieSession,storedSession);let encrypted=selected?.encrypted,session=selected?.session||null;
+  if(!session)return NextResponse.json({error:'Reconnect Discord before creating a role.'},{status:401});
+  try{
+    let guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'});
+    if(guildResponse.status===401){const refreshed=await refreshDiscordSession(session);if(refreshed){session=refreshed;encrypted=encryptDiscordSession(refreshed);await savePlatformConnection({platform:'discord',externalUserId:refreshed.user.id,displayName:refreshed.user.displayName,username:refreshed.user.username,avatarUrl:refreshed.user.avatarUrl,encryptedSession:encrypted});guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'})}}
+    if(!guildResponse.ok)return NextResponse.json({error:'Reconnect Discord, then try creating the role again.'},{status:401});
+    const guilds=await guildResponse.json() as Guild[];const manageGuild=BigInt(32);
+    if(!guilds.some(g=>g.id===guildId&&(g.owner||(BigInt(g.permissions)&manageGuild)===manageGuild)))return NextResponse.json({error:'You must manage this server to create roles.'},{status:403});
+    const token=process.env.DISCORD_BOT_TOKEN;if(!token)return NextResponse.json({error:'B.E.I.P.I.’s bot token is not configured.'},{status:503});
+    const createdResponse=await fetch(`https://discord.com/api/guilds/${guildId}/roles`,{method:'POST',headers:{Authorization:`Bot ${token}`,'Content-Type':'application/json'},body:JSON.stringify({name,permissions:'0',mentionable:false,hoist:false}),cache:'no-store'});
+    const role=await createdResponse.json() as Role&{message?:string};if(!createdResponse.ok||!role.id)return NextResponse.json({error:role.message||'B.E.I.P.I. could not create that role. Check her Manage Roles permission.'},{status:createdResponse.status||502});
+    const response=NextResponse.json({role:{id:role.id,name:role.name,color:role.color,position:role.position}},{headers:{'Cache-Control':'no-store'}});if(encrypted)response.cookies.set(DISCORD_SESSION_COOKIE,encrypted,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});return response;
+  }catch{return NextResponse.json({error:'Discord could not create the role right now.'},{status:502})}
+}
