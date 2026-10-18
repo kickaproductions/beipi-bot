@@ -257,6 +257,9 @@ body{font-size:16px}
 .shell .brand small{font-size:.75rem;color:var(--muted)}
 .shell .workspace strong{font-size:.9rem}
 .shell .workspace small{font-size:.75rem;color:var(--muted)}
+.shell .workspace,.shell .sidebar-note,.shell main>footer{display:none}.shell .crumb>span,.shell .crumb>svg{display:none}.shell .sidebar{width:280px}.shell .body{margin-left:280px;width:calc(100% - 280px)}.shell .brand small{white-space:nowrap}
+@media(max-width:1100px) and (min-width:651px){.shell .sidebar{width:250px}.shell .body{margin-left:250px;width:calc(100% - 250px)}}
+@media(max-width:650px){.shell .sidebar{width:250px}.shell .body{margin-left:0;width:100%}}
 .shell .nav-label{font-size:.72rem;color:var(--muted)}
 .shell nav button{font-size:.94rem;min-height:46px}
 .shell .count,.shell .soon{font-size:.7rem}
