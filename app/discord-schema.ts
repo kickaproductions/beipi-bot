@@ -1,6 +1,6 @@
 import { z } from 'zod';
 export const draftSchema=z.object({
-  type:z.enum(['channel','reaction']), title:z.string().trim().min(1).max(100),
+  type:z.enum(['channel','reaction']), title:z.string().trim().min(1,'Add a draft name or choose a channel first.').max(100),
   server:z.string().trim().min(1).max(100), mode:z.enum(['existing','new']),
   serverId:z.string().max(30).optional(), channelId:z.string().max(30).optional(),
   channel:z.string().trim().min(1).max(100), category:z.string().max(100).default(''),
