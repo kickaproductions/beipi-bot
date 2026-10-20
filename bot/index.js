@@ -1,4 +1,4 @@
-import {ActivityType,Client,Events,GatewayIntentBits,Partials} from 'discord.js';
+import {ActionRowBuilder,ActivityType,ButtonBuilder,ButtonStyle,Client,Events,GatewayIntentBits,Partials} from 'discord.js';
 import {createClient} from '@supabase/supabase-js';
 
 const discordToken=process.env.DISCORD_BOT_TOKEN||process.env.DISCORD_TOKEN;
@@ -8,13 +8,82 @@ if(!discordToken)throw new Error('DISCORD_BOT_TOKEN or DISCORD_TOKEN is required
 
 const supabase=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMembers,GatewayIntentBits.GuildPresences,GatewayIntentBits.GuildMessages,GatewayIntentBits.GuildMessageReactions],partials:[Partials.Message,Partials.Channel,Partials.Reaction]});
-const settings=new Map();const pendingOffline=new Map();const memberQueues=new Map();const activityCooldown=new Map();const activityCleanup=new Map();
+const settings=new Map();const pendingOffline=new Map();const memberQueues=new Map();const activityCooldown=new Map();const activityCleanup=new Map();let confirmationPollRunning=false;
 const randomItems=['rubber duck','spatula','traffic cone','emotional-support potato','garden gnome','squeaky hammer','battle spoon','glittery cactus','enchanted teacup','questionable wizard hat'];
 const randomAnimals=['platypus','capybara','penguin','red panda','axolotl','wombat','quokka','tiny goose','sleepy fox','chaotic raccoon'];
 const randomDinosaurs=['tiny triceratops','pocket velociraptor','baby stegosaurus','sparkly brachiosaurus','sleepy ankylosaurus','dramatic T-Rex'];
 const pick=list=>list[Math.floor(Math.random()*list.length)];
 const ownerDefault='# {streamer} is now live!\n{streamer} is streaming {game} on {platform}.\nThey brought their trusty {random_companion}!\nCome and say hello\n{url}';
 const creatorDefault='# {streamer} is now live!\nStreaming {game} on {platform}.\nCome and say hello\n{url}';
+
+const discordTimestamp=value=>Math.floor(new Date(value).getTime()/1000);
+const confirmationButtons=streamId=>new ActionRowBuilder().addComponents(
+ new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:yes`).setLabel('Yes, I’m streaming').setStyle(ButtonStyle.Success),
+ new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:no`).setLabel('No, cancel it').setStyle(ButtonStyle.Secondary)
+);
+
+async function processStreamConfirmations(){
+ if(confirmationPollRunning)return;confirmationPollRunning=true;
+ try{
+  const {data:confirmationSettings,error:settingsError}=await supabase.from('stream_confirmation_settings').select('*').eq('enabled',true);
+  if(settingsError){if(settingsError.code!=='42P01')console.error('[stream-confirmations]',settingsError.message);return}
+  if(!confirmationSettings?.length)return;
+  const userIds=confirmationSettings.map(row=>row.user_id),now=new Date(),cutoff=new Date(now.getTime()+60*60*1000);
+  const [{data:connections,error:connectionsError},{data:streams,error:streamsError}]=await Promise.all([
+   supabase.from('platform_connections').select('user_id,external_user_id,display_name').eq('platform','discord').in('user_id',userIds),
+   supabase.from('companion_items').select('id,user_id,title,note,due').eq('kind','crew-stream').eq('done',false).in('user_id',userIds).gt('due',now.toISOString()).lte('due',cutoff.toISOString())
+  ]);
+  if(connectionsError||streamsError){console.error('[stream-confirmations]',connectionsError?.message||streamsError?.message);return}
+  if(!streams?.length)return;
+  const {data:existing,error:runsError}=await supabase.from('stream_confirmation_runs').select('stream_id').in('stream_id',streams.map(row=>row.id));
+  if(runsError){console.error('[stream-confirmations]',runsError.message);return}
+  const sent=new Set((existing||[]).map(row=>row.stream_id)),connectionByUser=new Map((connections||[]).map(row=>[row.user_id,row]));
+  for(const stream of streams){
+   if(sent.has(stream.id))continue;
+   const config=confirmationSettings.find(row=>row.user_id===stream.user_id),connection=connectionByUser.get(stream.user_id);
+   if(!config||!connection?.external_user_id)continue;
+   const guild=client.guilds.cache.get(config.guild_id),channel=guild?.channels.cache.get(config.channel_id);
+   if(!guild||!channel?.isTextBased())continue;
+   const {error:claimError}=await supabase.from('stream_confirmation_runs').insert({stream_id:stream.id,user_id:stream.user_id,discord_user_id:connection.external_user_id,status:'claiming'});
+   if(claimError){if(claimError.code!=='23505')console.error('[stream-confirmations]',claimError.message);continue}
+   try{
+    const user=await client.users.fetch(connection.external_user_id);
+    const when=discordTimestamp(stream.due),message=await user.send({content:`Hi ${connection.display_name||user.displayName}! Your ${stream.note||'stream'} stream **${stream.title}** is scheduled for <t:${when}:F> (<t:${when}:R>).\n\nAre you still going live?`,components:[confirmationButtons(stream.id)]});
+    await supabase.from('stream_confirmation_runs').update({status:'pending',dm_message_id:message.id,sent_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('stream_id',stream.id);
+    console.log(`[stream-confirmation] Asked ${user.tag} about ${stream.title}.`);
+   }catch(error){
+    await supabase.from('stream_confirmation_runs').delete().eq('stream_id',stream.id);
+    console.error('[stream-confirmation-dm]',error);
+    await logActivity(config.guild_id,'stream_confirmation_error','warning','Stream confirmation DM failed',`B.E.I.P.I. could not message ${connection.display_name||'the streamer'}.`,{streamId:stream.id});
+   }
+  }
+ }finally{confirmationPollRunning=false}
+}
+
+async function handleStreamConfirmation(interaction){
+ if(!interaction.isButton()||!interaction.customId.startsWith('stream-confirm:'))return;
+ const [,streamId,answer]=interaction.customId.split(':');if(!streamId||!['yes','no'].includes(answer))return;
+ const {data:run,error:runError}=await supabase.from('stream_confirmation_runs').select('*').eq('stream_id',streamId).eq('discord_user_id',interaction.user.id).maybeSingle();
+ if(runError||!run){await interaction.reply({content:'I could not match this confirmation to your schedule.',ephemeral:true}).catch(()=>{});return}
+ if(run.status!=='pending'){await interaction.update({content:interaction.message.content+'\n\nThis stream has already been answered.',components:[]}).catch(()=>{});return}
+ const status=answer==='yes'?'confirmed':'cancelled',respondedAt=new Date().toISOString();
+ const {data:updated,error:updateError}=await supabase.from('stream_confirmation_runs').update({status,responded_at:respondedAt,updated_at:respondedAt}).eq('id',run.id).eq('status','pending').select('id').maybeSingle();
+ if(updateError||!updated){await interaction.reply({content:'That answer was already received.',ephemeral:true}).catch(()=>{});return}
+ const [{data:stream},{data:config}]=await Promise.all([
+  supabase.from('companion_items').select('title,note,due').eq('id',streamId).maybeSingle(),
+  supabase.from('stream_confirmation_settings').select('*').eq('user_id',run.user_id).maybeSingle()
+ ]);
+ const resultText=status==='confirmed'?'Perfect — you’re confirmed. I’ve let the server know.':'Got it — I’ve marked this stream as cancelled and let the server know.';
+ await interaction.update({content:`${interaction.message.content}\n\n**${resultText}**`,components:[]}).catch(()=>{});
+ if(!stream||!config)return;
+ const guild=client.guilds.cache.get(config.guild_id),channel=guild?.channels.cache.get(config.channel_id);
+ if(!channel?.isTextBased())return;
+ const name=interaction.user.globalName||interaction.user.username,when=discordTimestamp(stream.due);
+ const content=status==='confirmed'
+  ?`✅ **${name}** has confirmed **${stream.title}** on ${stream.note||'their stream'} for <t:${when}:F>.`
+  :`🫶 **${name}** has cancelled **${stream.title}**, which was scheduled for <t:${when}:F>.`;
+ try{const message=await channel.send({content,allowedMentions:{parse:[]}});await supabase.from('stream_confirmation_runs').update({announcement_message_id:message.id,updated_at:new Date().toISOString()}).eq('id',run.id);await logActivity(config.guild_id,status==='confirmed'?'stream_confirmed':'stream_cancelled','info',status==='confirmed'?'Scheduled stream confirmed':'Scheduled stream cancelled',`${name}: ${stream.title}`,{streamId,channelId:config.channel_id})}catch(error){console.error('[stream-confirmation-post]',error);await logActivity(config.guild_id,'stream_confirmation_error','error','Stream confirmation could not be posted',error instanceof Error?error.message:'Discord rejected the message.',{streamId})}
+}
 
 async function logActivity(guildId,eventType,severity,title,detail='',metadata={}){
  if(!guildId)return;
@@ -114,8 +183,9 @@ client.on(Events.PresenceUpdate,(oldPresence,newPresence)=>{
 });
 client.on(Events.MessageReactionAdd,(reaction,user)=>void handleReaction(reaction,user,true));
 client.on(Events.MessageReactionRemove,(reaction,user)=>void handleReaction(reaction,user,false));
+client.on(Events.InteractionCreate,interaction=>void handleStreamConfirmation(interaction));
 
-client.once(Events.ClientReady,async ready=>{console.log(`[ready] ${ready.user.tag} is online.`);await Promise.all([...ready.guilds.cache.values()].map(async guild=>{await syncGuild(guild);await logActivity(guild.id,'bot_online','info','B.E.I.P.I. came online','The Discord worker connected successfully.') }));await loadSettings();await reconcileAll();setInterval(()=>void loadSettings(),60000).unref();setInterval(()=>void reconcileAll(),30000).unref();setInterval(()=>void Promise.all([...client.guilds.cache.values()].map(guild=>syncGuild(guild))),300000).unref()});
+client.once(Events.ClientReady,async ready=>{console.log(`[ready] ${ready.user.tag} is online.`);await Promise.all([...ready.guilds.cache.values()].map(async guild=>{await syncGuild(guild);await logActivity(guild.id,'bot_online','info','B.E.I.P.I. came online','The Discord worker connected successfully.') }));await loadSettings();await reconcileAll();await processStreamConfirmations();setInterval(()=>void loadSettings(),60000).unref();setInterval(()=>void processStreamConfirmations(),60000).unref();setInterval(()=>void reconcileAll(),30000).unref();setInterval(()=>void Promise.all([...client.guilds.cache.values()].map(guild=>syncGuild(guild))),300000).unref()});
 client.on(Events.GuildCreate,guild=>void (async()=>{await syncGuild(guild);await logActivity(guild.id,'bot_joined','info','B.E.I.P.I. joined the server','The bot installation was registered.')})());
 client.on(Events.GuildDelete,guild=>void (async()=>{await logActivity(guild.id,'bot_removed','warning','B.E.I.P.I. left the server','The bot is no longer installed.');await syncGuild(guild,false)})());
 client.on(Events.Error,error=>console.error('[discord]',error));
