@@ -21,7 +21,7 @@ export async function GET(request:NextRequest){
     authorize.searchParams.set('response_type','code');
     authorize.searchParams.set('client_id',clientId);
     authorize.searchParams.set('redirect_uri',redirectUri);
-    authorize.searchParams.set('scope','user:read:email');
+    authorize.searchParams.set('scope','user:read:email user:read:moderated_channels');
     authorize.searchParams.set('state',state);
     const response=NextResponse.redirect(authorize);
     response.cookies.set(TWITCH_STATE_COOKIE,state,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:600});
