@@ -26,7 +26,7 @@ export async function POST(request:Request){
     if(authError||!user)return json({error:'Please sign in before saving.'},401);
     const body=await request.json() as {kind?:string;title?:string;note?:string;due?:string|null};
     const title=String(body.title??'').trim(),kind=String(body.kind??'');
-    if(!title||!['reminder','checklist','idea','connection'].includes(kind))return json({error:'Check the title and try again.'},400);
+    if(!title||!['reminder','checklist','idea','connection','crew-task','crew-stream','crew-milestone'].includes(kind))return json({error:'Check the title and try again.'},400);
     const {data,error}=await supabase.from('companion_items').insert({user_id:user.id,kind,title:title.slice(0,200),note:String(body.note??'').slice(0,2000),due:body.due||null}).select('id,kind,title,note,due,done,created_at').single();
     if(error)throw error;
     return json(present(data as ItemRow),201);
