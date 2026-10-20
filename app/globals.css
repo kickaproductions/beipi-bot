@@ -364,3 +364,5 @@ body{font-size:16px}
 @media(max-width:650px){.crew-header-actions{width:100%;display:grid!important;grid-template-columns:1fr 1fr}.crew-header-actions .crew-add{justify-content:center}.stream-confirm-settings{padding:16px}}
 @media(max-width:1150px){.crew-section-menu{grid-template-columns:1fr 1fr}}
 @media(max-width:650px){.crew-section-menu{grid-template-columns:1fr}}
+.stream-confirm-destination{grid-template-columns:1fr 1fr;gap:9px}.stream-confirm-destination label{display:grid;gap:6px}
+@media(max-width:650px){.stream-confirm-destination{grid-template-columns:1fr}}
