@@ -7,7 +7,7 @@ export const dynamic='force-dynamic';
 
 const areas=[
   {title:'Accounts',copy:'View registered accounts and manage developer, tester and launch access.',icon:Users,status:'Open account management',href:'/developer/accounts'},
-  {title:'Connections',copy:'See connection health across Twitch, Discord, Google and Kick.',icon:Link2,status:'Foundation ready'},
+  {title:'Connections',copy:'See connection health across Twitch, Discord, Google and YouTube.',icon:Link2,status:'Foundation ready'},
   {title:'Discord servers',copy:'Monitor installed communities, settings and server health.',icon:Server,status:'Open server management',href:'/developer/servers'},
   {title:'Analytics',copy:'Understand account growth, platform mix and traffic sources.',icon:BarChart3,status:'Coming next'},
   {title:'Tester feedback',copy:'Review Founding Tester reports, suggestions and screenshots.',icon:MessageSquareText,status:'Open review queue',href:'/developer/tester-feedback'},
