@@ -66,23 +66,34 @@ async function handleStreamConfirmation(interaction){
  const {data:run,error:runError}=await supabase.from('stream_confirmation_runs').select('*').eq('stream_id',streamId).eq('discord_user_id',interaction.user.id).maybeSingle();
  if(runError||!run){await interaction.reply({content:'I could not match this confirmation to your schedule.',ephemeral:true}).catch(()=>{});return}
  if(run.status!=='pending'){await interaction.update({content:interaction.message.content+'\n\nThis stream has already been answered.',components:[]}).catch(()=>{});return}
+ await interaction.deferUpdate().catch(()=>{});
  const status=answer==='yes'?'confirmed':'cancelled',respondedAt=new Date().toISOString();
- const {data:updated,error:updateError}=await supabase.from('stream_confirmation_runs').update({status,responded_at:respondedAt,updated_at:respondedAt}).eq('id',run.id).eq('status','pending').select('id').maybeSingle();
- if(updateError||!updated){await interaction.reply({content:'That answer was already received.',ephemeral:true}).catch(()=>{});return}
+ const {data:updated,error:updateError}=await supabase.from('stream_confirmation_runs').update({status:'claiming',updated_at:respondedAt}).eq('id',run.id).eq('status','pending').select('id').maybeSingle();
+ if(updateError||!updated){await interaction.editReply({content:`${interaction.message.content}\n\nThat answer was already received.`,components:[]}).catch(()=>{});return}
  const [{data:stream},{data:config}]=await Promise.all([
   supabase.from('companion_items').select('title,note,due').eq('id',streamId).maybeSingle(),
   supabase.from('stream_confirmation_settings').select('*').eq('user_id',run.user_id).maybeSingle()
  ]);
- const resultText=status==='confirmed'?'Perfect — you’re confirmed. I’ve let the server know.':'Got it — I’ve marked this stream as cancelled and let the server know.';
- await interaction.update({content:`${interaction.message.content}\n\n**${resultText}**`,components:[]}).catch(()=>{});
- if(!stream||!config)return;
- const guild=client.guilds.cache.get(config.guild_id),channel=guild?.channels.cache.get(config.channel_id);
- if(!channel?.isTextBased())return;
+ if(!stream||!config){await supabase.from('stream_confirmation_runs').update({status:'pending',updated_at:new Date().toISOString()}).eq('id',run.id);await interaction.editReply({content:`${interaction.message.content}\n\n**I saved your click, but I could not find the schedule settings. Please try again.**`,components:[confirmationButtons(streamId)]}).catch(()=>{});return}
  const name=interaction.user.globalName||interaction.user.username,when=discordTimestamp(stream.due);
  const content=status==='confirmed'
   ?`✅ **${name}** has confirmed **${stream.title}** on ${stream.note||'their stream'} for <t:${when}:F>.`
   :`🫶 **${name}** has cancelled **${stream.title}**, which was scheduled for <t:${when}:F>.`;
- try{const message=await channel.send({content,allowedMentions:{parse:[]}});await supabase.from('stream_confirmation_runs').update({announcement_message_id:message.id,updated_at:new Date().toISOString()}).eq('id',run.id);await logActivity(config.guild_id,status==='confirmed'?'stream_confirmed':'stream_cancelled','info',status==='confirmed'?'Scheduled stream confirmed':'Scheduled stream cancelled',`${name}: ${stream.title}`,{streamId,channelId:config.channel_id})}catch(error){console.error('[stream-confirmation-post]',error);await logActivity(config.guild_id,'stream_confirmation_error','error','Stream confirmation could not be posted',error instanceof Error?error.message:'Discord rejected the message.',{streamId})}
+ try{
+  const channel=await client.channels.fetch(config.channel_id);
+  if(!channel?.isTextBased()||channel.isDMBased())throw new Error('The selected destination is not a server text channel.');
+  const message=await channel.send({content,allowedMentions:{parse:[]}});
+  await supabase.from('stream_confirmation_runs').update({status,responded_at:respondedAt,announcement_message_id:message.id,updated_at:new Date().toISOString()}).eq('id',run.id);
+  const resultText=status==='confirmed'?'Perfect — you’re confirmed. I’ve let the server know.':'Got it — I’ve marked this stream as cancelled and let the server know.';
+  await interaction.editReply({content:`${interaction.message.content}\n\n**${resultText}**`,components:[]}).catch(()=>{});
+  await logActivity(config.guild_id,status==='confirmed'?'stream_confirmed':'stream_cancelled','info',status==='confirmed'?'Scheduled stream confirmed':'Scheduled stream cancelled',`${name}: ${stream.title}`,{streamId,channelId:config.channel_id});
+ }catch(error){
+  await supabase.from('stream_confirmation_runs').update({status:'pending',updated_at:new Date().toISOString()}).eq('id',run.id);
+  const detail=error instanceof Error?error.message:'Discord rejected the message.';
+  await interaction.editReply({content:`${interaction.message.content}\n\n**I couldn’t post in #${config.channel_name||'the selected channel'} yet. Please give B.E.I.P.I. View Channel and Send Messages permission there, then press your answer again.**`,components:[confirmationButtons(streamId)]}).catch(()=>{});
+  console.error('[stream-confirmation-post]',error);
+  await logActivity(config.guild_id,'stream_confirmation_error','error','Stream confirmation could not be posted',detail,{streamId,channelId:config.channel_id});
+ }
 }
 
 async function logActivity(guildId,eventType,severity,title,detail='',metadata={}){
