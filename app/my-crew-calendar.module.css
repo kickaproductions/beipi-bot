@@ -115,6 +115,11 @@
   transform: none;
 }
 
+.calendar :global(.crew-day:nth-last-child(-n+14) .crew-day-tooltip) {
+  top: auto;
+  bottom: calc(100% - 5px);
+}
+
 @media (max-width: 650px) {
   .calendar :global(.crew-day > b) {
     width: 27px;
