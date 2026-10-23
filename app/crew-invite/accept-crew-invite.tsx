@@ -1,0 +1,10 @@
+'use client';
+
+import {useState} from 'react';
+import {Check,ShieldCheck,Users} from 'lucide-react';
+
+export default function AcceptCrewInvite({token}:{token:string}){
+ const [busy,setBusy]=useState(false),[error,setError]=useState(''),[accepted,setAccepted]=useState('');
+ async function accept(){setBusy(true);setError('');try{const response=await fetch('/api/crew/invitations/accept',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})}),data=await response.json() as {error?:string;displayName?:string;broadcasterId?:string};if(!response.ok)throw Error(data.error);setAccepted(data.displayName||'your streamer');setTimeout(()=>window.location.assign(`/dashboard?crewSpace=${encodeURIComponent(data.broadcasterId||'')}`),900)}catch(value){setError(value instanceof Error?value.message:'This invitation could not be accepted.')}finally{setBusy(false)}}
+ return <main className="account-shell crew-invite-shell"><a href="/" className="account-back">B.E.I.P.I.</a><section className="account-card crew-invite-card"><div className="account-brand"><img src="/beipi-account-logo.png" alt="B.E.I.P.I. Bot mascot logo"/><div><strong>B.E.I.P.I.</strong><small>Your streaming companion</small></div></div>{accepted?<div className="account-state"><span className="account-success"><Check/></span><h1>Invitation accepted!</h1><p>{accepted}’s shared space is ready. Taking you there now…</p></div>:<div className="account-state"><span className="crew-invite-icon"><Users/></span><span className="account-kicker">SHARED SPACE</span><h1>You’ve been invited.</h1><p>Accept to help with the streamer’s schedule, tasks and shared notes.</p>{error&&<div className="account-error" role="alert">{error}</div>}<button className="primary account-dashboard" disabled={busy||!token} onClick={()=>void accept()}>{busy?'Accepting…':'Accept invitation'}</button>{!token&&<p className="account-error">This invitation link is incomplete.</p>}<small className="account-trust"><ShieldCheck size={14}/> Only accept invitations from streamers you know.</small></div>}</section></main>;
+}

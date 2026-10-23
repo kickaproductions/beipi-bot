@@ -9,7 +9,7 @@ export async function GET(){
 }
 
 export async function POST(request:Request){
- try{const {supabase,user}=await account();if(!user)return json({error:'Sign in to invite a moderator.'},401);const parsed=z.object({twitchUsername:z.string().trim().min(1).max(60)}).safeParse(await request.json());if(!parsed.success)return json({error:'Enter the moderator’s Twitch username.'},400);const {data,error}=await supabase.rpc('invite_crew_moderator',{target_twitch_username:parsed.data.twitchUsername.replace(/^@/,'')});if(error)throw error;if(!data?.ok)return json({error:data?.error||'That moderator could not be invited.'},400);return json(data,201)}catch{return json({error:'B.E.I.P.I. could not send that invitation.'},500)}
+ try{const {supabase,user}=await account();if(!user)return json({error:'Sign in to invite a moderator.'},401);const {data,error}=await supabase.rpc('create_crew_invite_link');if(error)throw error;if(!data?.ok)return json({error:data?.error||'That invitation link could not be created.'},400);const origin=new URL(request.url).origin;return json({...data,inviteUrl:`${origin}/crew-invite?token=${encodeURIComponent(data.token)}`,token:undefined},201)}catch{return json({error:'B.E.I.P.I. could not create that invitation link. Run the latest Supabase migration first.'},500)}
 }
 
 export async function PATCH(request:Request){
