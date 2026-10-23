@@ -19,6 +19,19 @@ const creatorDefault='# {streamer} is now live!\nStreaming {game} on {platform}.
 const discordTimestamp=value=>Math.floor(new Date(value).getTime()/1000);
 const streamDetails=note=>{try{const value=JSON.parse(note);if(value?.v===1)return {platform:String(value.platform||'stream'),game:String(value.game||''),username:String(value.username||'')}}catch{}return {platform:note||'stream',game:'',username:''}};
 const streamDestination=details=>details.username?`${details.platform} (@${details.username.replace(/^@/,'')})`:details.platform;
+const defaultConfirmationMessage='# Stream in 1 hour!\n\n{username} is streaming {game}, see you soon!\n\n{embed}\n\n@{role}';
+function streamLinks(details){
+ if(details.platform==='Twitch'&&details.username)return `https://twitch.tv/${details.username.replace(/^@/,'')}`;
+ if(details.platform==='YouTube'&&details.username){const name=details.username.replace(/^@/,'');return `https://youtube.com/@${name}`}
+ if(details.platform==='Multi-platform')return [...details.username.matchAll(/(Twitch|YouTube)\s+@([^·\s]+)/g)].map(([,platform,name])=>platform==='Twitch'?`https://twitch.tv/${name}`:`https://youtube.com/@${name}`).join('\n');
+ return '';
+}
+function renderConfirmationMessage(template,stream,details,config){
+ const username=details.platform==='Multi-platform'?details.username:`@${details.username.replace(/^@/,'')}`;
+ const roleMention=config.role_id?`<@&${config.role_id}>`:`@${config.role_name||'streamers'}`;
+ const values={username:username||'Your streamer',game:details.game||stream.title,title:stream.title,platform:details.platform,embed:streamLinks(details)||streamDestination(details)};
+ return (template||defaultConfirmationMessage).replaceAll('@{role}',roleMention).replaceAll('{role}',config.role_name||'streamers').replace(/\{(username|game|title|platform|embed)\}/g,(_,key)=>values[key]||'').trim().slice(0,1950);
+}
 const confirmationButtons=streamId=>new ActionRowBuilder().addComponents(
  new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:yes`).setLabel('Yes, I’m streaming').setStyle(ButtonStyle.Success),
  new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:no`).setLabel('No, cancel it').setStyle(ButtonStyle.Secondary)
@@ -77,12 +90,12 @@ async function handleStreamConfirmation(interaction){
   supabase.from('stream_confirmation_settings').select('*').eq('user_id',run.user_id).maybeSingle()
  ]);
  if(!stream||!config){await supabase.from('stream_confirmation_runs').update({status:'pending',updated_at:new Date().toISOString()}).eq('id',run.id);await interaction.editReply({content:`${interaction.message.content}\n\n**I saved your click, but I could not find the schedule settings. Please try again.**`,components:[confirmationButtons(streamId)]}).catch(()=>{});return}
- const name=interaction.user.globalName||interaction.user.username,when=discordTimestamp(stream.due),details=streamDetails(stream.note),game=details.game?` playing **${details.game}**`:'';
+ const name=interaction.user.globalName||interaction.user.username,when=discordTimestamp(stream.due),details=streamDetails(stream.note);
  const content=status==='confirmed'
-  ?`✅ **${name}** has confirmed **${stream.title}**${game} on ${streamDestination(details)} for <t:${when}:F>.`
+  ?renderConfirmationMessage(config.message_template,stream,details,config)
   :`🫶 **${name}** has cancelled **${stream.title}**, which was scheduled for <t:${when}:F>.`;
  try{
-  const message=await client.rest.post(Routes.channelMessages(config.channel_id),{body:{content,allowed_mentions:{parse:[]}}});
+  const message=await client.rest.post(Routes.channelMessages(config.channel_id),{body:{content,allowed_mentions:{parse:[],roles:status==='confirmed'&&config.role_id?[config.role_id]:[]}}});
   if(!message?.id)throw new Error('Discord did not return a message ID.');
   await supabase.from('stream_confirmation_runs').update({status,responded_at:respondedAt,announcement_message_id:message.id,updated_at:new Date().toISOString()}).eq('id',run.id);
   const resultText=status==='confirmed'?'Perfect — you’re confirmed. I’ve let the server know.':'Got it — I’ve marked this stream as cancelled and let the server know.';
