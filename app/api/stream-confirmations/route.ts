@@ -6,7 +6,8 @@ import {DISCORD_SESSION_COOKIE,encryptDiscordSession,newestDiscordSession,refres
 
 export const runtime='nodejs';
 const defaultMessage='# Stream in 1 hour!\n\n{username} is streaming {game}, see you soon!\n\n{embed}\n\n@{role}';
-const schema=z.object({enabled:z.boolean(),guildId:z.string().max(30).default(''),channelId:z.string().max(30).default(''),roleId:z.string().max(30).default(''),messageTemplate:z.string().min(1).max(2000).default(defaultMessage)});
+const defaultCancelMessage='# Stream Cancelled\n\n{username} has cancelled their stream.';
+const schema=z.object({enabled:z.boolean(),guildId:z.string().max(30).default(''),channelId:z.string().max(30).default(''),roleId:z.string().max(30).default(''),messageTemplate:z.string().min(1).max(2000).default(defaultMessage),cancelMessageTemplate:z.string().min(1).max(2000).default(defaultCancelMessage)});
 const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'no-store'}});
 type Guild={id:string;name:string;owner:boolean;permissions:string};
 type DiscordChannel={id:string;name:string;type:number};
@@ -32,7 +33,7 @@ export async function GET(){
       supabase.from('platform_connections').select('external_user_id').eq('user_id',user.id).eq('platform','discord').maybeSingle()
     ]);
     if(settingsError||runsError||discordError)throw settingsError||runsError||discordError;
-    return json({connectedDiscord:Boolean(discord?.external_user_id),settings:settings?{enabled:settings.enabled,guildId:settings.guild_id||'',guildName:settings.guild_name||'',channelId:settings.channel_id||'',channelName:settings.channel_name||'',roleId:settings.role_id||'',roleName:settings.role_name||'',messageTemplate:settings.message_template||defaultMessage}:null,statuses:Object.fromEntries((runs||[]).map(run=>[run.stream_id,{status:run.status,sentAt:run.sent_at,respondedAt:run.responded_at}]))});
+    return json({connectedDiscord:Boolean(discord?.external_user_id),settings:settings?{enabled:settings.enabled,guildId:settings.guild_id||'',guildName:settings.guild_name||'',channelId:settings.channel_id||'',channelName:settings.channel_name||'',roleId:settings.role_id||'',roleName:settings.role_name||'',messageTemplate:settings.message_template||defaultMessage,cancelMessageTemplate:settings.cancel_message_template||defaultCancelMessage}:null,statuses:Object.fromEntries((runs||[]).map(run=>[run.stream_id,{status:run.status,sentAt:run.sent_at,respondedAt:run.responded_at}]))});
   }catch{return json({error:'B.E.I.P.I. could not load stream confirmations. Run the latest Supabase migration if this is your first visit.'},500)}
 }
 
@@ -68,10 +69,10 @@ export async function PUT(request:NextRequest){
       if(!role)return json({error:'Choose a Discord role B.E.I.P.I. can mention.'},400);
       guildName=guild.name;channelName=channel.name;roleName=role.name;
     }
-    const {data,error}=await supabase.from('stream_confirmation_settings').upsert({user_id:user.id,enabled:value.enabled,guild_id:value.enabled?value.guildId:null,guild_name:value.enabled?guildName:null,channel_id:value.enabled?value.channelId:null,channel_name:value.enabled?channelName:null,role_id:value.enabled?value.roleId:null,role_name:value.enabled?roleName:null,message_template:value.messageTemplate,lead_minutes:60,updated_at:new Date().toISOString()},{onConflict:'user_id'}).select('*').single();
+    const {data,error}=await supabase.from('stream_confirmation_settings').upsert({user_id:user.id,enabled:value.enabled,guild_id:value.enabled?value.guildId:null,guild_name:value.enabled?guildName:null,channel_id:value.enabled?value.channelId:null,channel_name:value.enabled?channelName:null,role_id:value.enabled?value.roleId:null,role_name:value.enabled?roleName:null,message_template:value.messageTemplate,cancel_message_template:value.cancelMessageTemplate,lead_minutes:60,updated_at:new Date().toISOString()},{onConflict:'user_id'}).select('*').single();
     if(error)throw error;
-    const response=json({settings:{enabled:data.enabled,guildId:data.guild_id||'',guildName:data.guild_name||'',channelId:data.channel_id||'',channelName:data.channel_name||'',roleId:data.role_id||'',roleName:data.role_name||'',messageTemplate:data.message_template||defaultMessage}});
+    const response=json({settings:{enabled:data.enabled,guildId:data.guild_id||'',guildName:data.guild_name||'',channelId:data.channel_id||'',channelName:data.channel_name||'',roleId:data.role_id||'',roleName:data.role_name||'',messageTemplate:data.message_template||defaultMessage,cancelMessageTemplate:data.cancel_message_template||defaultCancelMessage}});
     if(refreshedCookie)response.cookies.set(DISCORD_SESSION_COOKIE,refreshedCookie,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});
     return response;
-  }catch{return json({error:'B.E.I.P.I. could not save stream confirmations.'},500)}
+  }catch(error){const code=typeof error==='object'&&error&&'code' in error?String(error.code):'';return json({error:code==='42703'?'Run the latest Supabase migration, then save these settings again.':'B.E.I.P.I. could not save stream confirmations.'},500)}
 }
