@@ -1,5 +1,5 @@
 import {redirect} from 'next/navigation';
-import {ArrowLeft,BarChart3,Bug,Code2,Heart,Link2,MessageSquareText,Server,ShieldCheck,Users} from 'lucide-react';
+import {ArrowLeft,BarChart3,Bug,Code2,Heart,Link2,MessageSquareText,Server,ShieldCheck,UserCheck,Users} from 'lucide-react';
 import {createClient} from '@/lib/supabase/server';
 
 export const metadata={title:'Developer Portal · B.E.I.P.I.'};
@@ -11,6 +11,7 @@ const areas=[
   {title:'Discord servers',copy:'Monitor installed communities, settings and server health.',icon:Server,status:'Open server management',href:'/developer/servers'},
   {title:'Analytics',copy:'Understand account growth, platform mix and traffic sources.',icon:BarChart3,status:'Coming next'},
   {title:'Tester feedback',copy:'Review Founding Tester reports, suggestions and screenshots.',icon:MessageSquareText,status:'Open review queue',href:'/developer/tester-feedback'},
+  {title:'Beta requests',copy:'Approve creators who have requested access to the private Tester Portal.',icon:UserCheck,status:'Review access requests',href:'/developer/tester-requests'},
   {title:'System health',copy:'Keep an eye on connection errors and B.E.I.P.I. services.',icon:Bug,status:'Coming next'},
 ];
 
