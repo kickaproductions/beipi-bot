@@ -46,7 +46,25 @@ export default function MyCrew({items,busy,streamingAccounts,onCreate,onUpdate,o
  const calendarDays=useMemo(()=>{const year=month.getFullYear(),index=month.getMonth(),first=(new Date(year,index,1).getDay()+6)%7,total=new Date(year,index+1,0).getDate();return [...Array(first).fill(null),...Array.from({length:total},(_,i)=>new Date(year,index,i+1))]},[month]);
  async function addTask(e:FormEvent<HTMLFormElement>){e.preventDefault();const form=new FormData(e.currentTarget);const date=String(form.get('date')||'');if(await onCreate({kind:'crew-task',title:String(form.get('title')),due:date?new Date(date+'T12:00:00').toISOString():null})){e.currentTarget.reset();setTaskOpen(false);onSaved('Added to the crew list.')}}
  function connectedUsername(platform:string){if(platform==='Twitch')return streamingAccounts.twitch.replace(/^@/,'');if(platform==='YouTube')return streamingAccounts.youtube.replace(/^@/,'');if(platform==='Multi-platform')return [streamingAccounts.twitch&&`Twitch @${streamingAccounts.twitch.replace(/^@/,'')}`,streamingAccounts.youtube&&`YouTube @${streamingAccounts.youtube.replace(/^@/,'')}`].filter(Boolean).join(' · ');return ''}
- async function saveStream(e:FormEvent<HTMLFormElement>){e.preventDefault();const form=new FormData(e.currentTarget),existing=streamDetails(editingStream?.note||''),username=connectedUsername(schedulePlatform)||(existing.platform===schedulePlatform?existing.username:'');if(!username){setScheduleAccountError(`Connect ${schedulePlatform} to B.E.I.P.I. before scheduling this stream.`);return}const date=String(form.get('date')),time=String(form.get('time')),title=String(form.get('title')),game=String(form.get('game')).trim(),start=new Date(`${date}T${time}`);if(editingStream){const note=streamNote({...existing,game,platform:schedulePlatform,username});if(await onUpdate(editingStream.id,{title,note,due:start.toISOString()})){e.currentTarget.reset();closeStreamDialog();onSaved('Stream updated.')}return}const total=scheduleRepeat==='none'?1:scheduleOccurrences,seriesId=total>1?crypto.randomUUID():undefined;for(let index=0;index<total;index++){const note=streamNote({game,platform:schedulePlatform,username,seriesId,recurrence:scheduleRepeat});if(!await onCreate({kind:'crew-stream',title,note,due:repeatedDate(start,scheduleRepeat,index).toISOString()}))return}e.currentTarget.reset();closeStreamDialog();onSaved(total>1?`${total} recurring streams added to your calendar.`:'Stream added to your schedule.')}
+ async function saveStream(e:FormEvent<HTMLFormElement>){
+  e.preventDefault();
+  const formElement=e.currentTarget,form=new FormData(formElement),existing=streamDetails(editingStream?.note||''),username=connectedUsername(schedulePlatform)||(existing.platform===schedulePlatform?existing.username:'');
+  if(!username){setScheduleAccountError(`Connect ${schedulePlatform} to B.E.I.P.I. before scheduling this stream.`);return}
+  const date=String(form.get('date')),time=String(form.get('time')),title=String(form.get('title')),game=String(form.get('game')).trim(),start=new Date(`${date}T${time}`);
+  if(editingStream){
+   const note=streamNote({...existing,game,platform:schedulePlatform,username});
+   if(await onUpdate(editingStream.id,{title,note,due:start.toISOString()})){formElement.reset();closeStreamDialog();onSaved('Stream updated.')}
+   return;
+  }
+  const total=scheduleRepeat==='none'?1:scheduleOccurrences,seriesId=total>1?crypto.randomUUID():undefined;
+  for(let index=0;index<total;index++){
+   const note=streamNote({game,platform:schedulePlatform,username,seriesId,recurrence:scheduleRepeat});
+   if(!await onCreate({kind:'crew-stream',title,note,due:repeatedDate(start,scheduleRepeat,index).toISOString()}))return;
+  }
+  formElement.reset();
+  closeStreamDialog();
+  onSaved(total>1?`${total} recurring streams added to your calendar.`:'Stream added to your schedule.');
+ }
  function openNewStream(){setEditingStream(null);setSchedulePlatform(streamingAccounts.twitch?'Twitch':streamingAccounts.youtube?'YouTube':'Twitch');setScheduleRepeat('none');setScheduleOccurrences(4);setScheduleAccountError('');setScheduleOpen(true)}
  function openEditStream(item:CrewItem){setEditingStream(item);setSchedulePlatform(streamDetails(item.note).platform);setScheduleAccountError('');setScheduleOpen(true)}
  function closeStreamDialog(){setScheduleOpen(false);setEditingStream(null);setScheduleAccountError('')}
