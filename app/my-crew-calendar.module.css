@@ -120,6 +120,52 @@
   bottom: calc(100% - 5px);
 }
 
+.connectedAccount,
+.missingAccount {
+  display: grid;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 1px solid #4a3a55;
+  border-radius: 10px;
+  background: #19141f;
+}
+
+.connectedAccount strong,
+.missingAccount strong {
+  font-size: .72rem;
+}
+
+.connectedAccount span,
+.missingAccount span {
+  font-size: .76rem;
+}
+
+.connectedAccount {
+  border-color: #517365;
+  background: #1b2824;
+}
+
+.connectedAccount strong {
+  color: #9ed1b8;
+}
+
+.connectedAccount span {
+  color: #e7f3ed;
+}
+
+.missingAccount {
+  border-color: #755c4e;
+  background: #2a211d;
+}
+
+.missingAccount strong {
+  color: #e3b798;
+}
+
+.missingAccount span {
+  color: #cdbdb3;
+}
+
 @media (max-width: 650px) {
   .calendar :global(.crew-day > b) {
     width: 27px;
