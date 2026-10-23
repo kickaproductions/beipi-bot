@@ -20,18 +20,20 @@ const discordTimestamp=value=>Math.floor(new Date(value).getTime()/1000);
 const streamDetails=note=>{try{const value=JSON.parse(note);if(value?.v===1)return {platform:String(value.platform||'stream'),game:String(value.game||''),username:String(value.username||'')}}catch{}return {platform:note||'stream',game:'',username:''}};
 const streamDestination=details=>details.username?`${details.platform} (@${details.username.replace(/^@/,'')})`:details.platform;
 const defaultConfirmationMessage='# Stream in 1 hour!\n\n{username} is streaming {game}, see you soon!\n\n{embed}\n\n@{role}';
-const defaultCancellationMessage='# Stream Cancelled\n\n{username} has cancelled their stream.';
+const defaultCancellationMessage='# Stream Cancelled\n\n{username} has cancelled their stream.\n\nTheir next stream is on: {date and time}';
 function streamLinks(details){
  if(details.platform==='Twitch'&&details.username)return `https://twitch.tv/${details.username.replace(/^@/,'')}`;
  if(details.platform==='YouTube'&&details.username){const name=details.username.replace(/^@/,'');return `https://youtube.com/@${name}`}
  if(details.platform==='Multi-platform')return [...details.username.matchAll(/(Twitch|YouTube)\s+@([^·\s]+)/g)].map(([,platform,name])=>platform==='Twitch'?`https://twitch.tv/${name}`:`https://youtube.com/@${name}`).join('\n');
  return '';
 }
-function renderConfirmationMessage(template,stream,details,config){
+function renderConfirmationMessage(template,stream,details,config,nextStream=null){
  const username=details.platform==='Multi-platform'?details.username:`@${details.username.replace(/^@/,'')}`;
  const roleMention=config.role_id?`<@&${config.role_id}>`:`@${config.role_name||'streamers'}`;
- const values={username:username||'Your streamer',game:details.game||stream.title,title:stream.title,platform:details.platform,embed:streamLinks(details)||streamDestination(details)};
- return (template||defaultConfirmationMessage).replaceAll('@{role}',roleMention).replaceAll('{role}',config.role_name||'streamers').replace(/\{(username|game|title|platform|embed)\}/g,(_,key)=>values[key]||'').trim().slice(0,1950);
+ const values={username:username||'Your streamer',game:details.game||stream.title,title:stream.title,platform:details.platform,embed:streamLinks(details)||streamDestination(details),'date and time':nextStream?`<t:${discordTimestamp(nextStream.due)}:F>`:'',next_stream:nextStream?`<t:${discordTimestamp(nextStream.due)}:F>`:''};
+ let source=template||defaultConfirmationMessage;
+ if(!nextStream)source=source.split('\n').filter(line=>!line.includes('{date and time}')&&!line.includes('{next_stream}')).join('\n').replace(/\n{3,}/g,'\n\n');
+ return source.replaceAll('@{role}',roleMention).replaceAll('{role}',config.role_name||'streamers').replace(/\{(username|game|title|platform|embed|date and time|next_stream)\}/g,(_,key)=>values[key]||'').trim().slice(0,1950);
 }
 const confirmationButtons=streamId=>new ActionRowBuilder().addComponents(
  new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:yes`).setLabel('Yes, I’m streaming').setStyle(ButtonStyle.Success),
@@ -43,8 +45,8 @@ async function processStreamConfirmations(){
  try{
   const {data:confirmationSettings,error:settingsError}=await supabase.from('stream_confirmation_settings').select('*').eq('enabled',true);
   if(settingsError){if(settingsError.code!=='42P01')console.error('[stream-confirmations]',settingsError.message);return}
-  if(!confirmationSettings?.length)return;
-  const userIds=confirmationSettings.map(row=>row.user_id),now=new Date(),cutoff=new Date(now.getTime()+60*60*1000);
+  const activeSettings=(confirmationSettings||[]).filter(row=>!row.holiday_mode);if(!activeSettings.length)return;
+  const userIds=activeSettings.map(row=>row.user_id),now=new Date(),cutoff=new Date(now.getTime()+60*60*1000);
   const [{data:connections,error:connectionsError},{data:streams,error:streamsError}]=await Promise.all([
    supabase.from('platform_connections').select('user_id,external_user_id,display_name').eq('platform','discord').in('user_id',userIds),
    supabase.from('companion_items').select('id,user_id,title,note,due').eq('kind','crew-stream').eq('done',false).in('user_id',userIds).gt('due',now.toISOString()).lte('due',cutoff.toISOString())
@@ -56,7 +58,7 @@ async function processStreamConfirmations(){
   const sent=new Set((existing||[]).map(row=>row.stream_id)),connectionByUser=new Map((connections||[]).map(row=>[row.user_id,row]));
   for(const stream of streams){
    if(sent.has(stream.id))continue;
-   const config=confirmationSettings.find(row=>row.user_id===stream.user_id),connection=connectionByUser.get(stream.user_id);
+   const config=activeSettings.find(row=>row.user_id===stream.user_id),connection=connectionByUser.get(stream.user_id);
    if(!config||!connection?.external_user_id)continue;
    const guild=client.guilds.cache.get(config.guild_id);
    if(!guild){await logActivity(config.guild_id,'stream_confirmation_error','warning','Confirmation server unavailable','B.E.I.P.I. is not connected to the selected Discord server.',{streamId:stream.id});continue}
@@ -91,10 +93,11 @@ async function handleStreamConfirmation(interaction){
   supabase.from('stream_confirmation_settings').select('*').eq('user_id',run.user_id).maybeSingle()
  ]);
  if(!stream||!config){await supabase.from('stream_confirmation_runs').update({status:'pending',updated_at:new Date().toISOString()}).eq('id',run.id);await interaction.editReply({content:`${interaction.message.content}\n\n**I saved your click, but I could not find the schedule settings. Please try again.**`,components:[confirmationButtons(streamId)]}).catch(()=>{});return}
+ const {data:nextStream}=await supabase.from('companion_items').select('title,due').eq('user_id',run.user_id).eq('kind','crew-stream').eq('done',false).gt('due',stream.due).order('due',{ascending:true}).limit(1).maybeSingle();
  const name=interaction.user.globalName||interaction.user.username,when=discordTimestamp(stream.due),details=streamDetails(stream.note);
  const content=status==='confirmed'
   ?renderConfirmationMessage(config.message_template,stream,details,config)
-  :renderConfirmationMessage(config.cancel_message_template||defaultCancellationMessage,stream,details,config);
+  :renderConfirmationMessage(config.cancel_message_template||defaultCancellationMessage,stream,details,config,nextStream);
  try{
   const message=await client.rest.post(Routes.channelMessages(config.channel_id),{body:{content,allowed_mentions:{parse:[],roles:config.role_id?[config.role_id]:[]}}});
   if(!message?.id)throw new Error('Discord did not return a message ID.');
