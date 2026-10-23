@@ -37,9 +37,15 @@ export async function PATCH(request:Request){
   try{
     const {supabase,user,error:authError}=await signedIn();
     if(authError||!user)return json({error:'Please sign in before changing saved items.'},401);
-    const body=await request.json() as {id?:string;done?:boolean;due?:string|null};
+    const body=await request.json() as {id?:string;title?:string;note?:string;done?:boolean;due?:string|null};
     if(!body.id)return json({error:'Item not found.'},404);
     const changes:Record<string,unknown>={updated_at:new Date().toISOString()};
+    if(typeof body.title==='string'){
+      const title=body.title.trim();
+      if(!title)return json({error:'Add a stream title before saving.'},400);
+      changes.title=title.slice(0,200);
+    }
+    if(typeof body.note==='string')changes.note=body.note.slice(0,2000);
     if(typeof body.done==='boolean')changes.done=body.done;
     if(body.due===null||typeof body.due==='string')changes.due=body.due;
     const {data,error}=await supabase.from('companion_items').update(changes).eq('id',body.id).eq('user_id',user.id).select('id,kind,title,note,due,done,created_at').maybeSingle();
