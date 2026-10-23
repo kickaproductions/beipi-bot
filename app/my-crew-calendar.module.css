@@ -166,6 +166,83 @@
   color: #cdbdb3;
 }
 
+.confirmationEditor {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #43344d;
+  border-radius: 12px;
+  background: #211a29;
+}
+
+.confirmationEditor > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.confirmationEditor strong {
+  font-size: .78rem;
+}
+
+.confirmationEditor select {
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid #4a3a55;
+  border-radius: 8px;
+  background: #19141f;
+  color: #e9e0ee;
+  font-size: .68rem;
+}
+
+.confirmationEditor textarea {
+  width: 100%;
+  min-height: 155px;
+  resize: vertical;
+  padding: 12px;
+  border: 1px solid #4a3a55;
+  border-radius: 9px;
+  background: #19141f;
+  color: #f4edf7;
+  font: .78rem/1.55 Arial, "Helvetica Neue", sans-serif;
+  outline: none;
+}
+
+.confirmationEditor textarea:focus {
+  border-color: #b499c5;
+  box-shadow: 0 0 0 3px #b499c51f;
+}
+
+.confirmationEditor > small {
+  color: #9f92a7;
+  font-size: .64rem;
+}
+
+.confirmationPreview {
+  display: grid;
+  gap: 8px;
+  margin-top: 5px;
+  padding: 13px;
+  border-radius: 9px;
+  background: #313338;
+}
+
+.confirmationPreview > span {
+  color: #9ca0a8;
+  font-size: .58rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+
+.confirmationPreview pre {
+  margin: 0;
+  color: #f2f3f5;
+  font: .76rem/1.55 Arial, "Helvetica Neue", sans-serif;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 650px) {
   .calendar :global(.crew-day > b) {
     width: 27px;
@@ -187,5 +264,10 @@
 
   .calendar :global(.crew-day.has-streams) {
     cursor: pointer;
+  }
+
+  .confirmationEditor > div:first-child {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
