@@ -7,7 +7,7 @@ for(const name of required)if(!process.env[name])throw new Error(`${name} is req
 if(!discordToken)throw new Error('DISCORD_BOT_TOKEN or DISCORD_TOKEN is required.');
 
 const supabase=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
-const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMembers,GatewayIntentBits.GuildPresences,GatewayIntentBits.GuildMessages,GatewayIntentBits.GuildMessageReactions],partials:[Partials.Message,Partials.Channel,Partials.Reaction]});
+const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMembers,GatewayIntentBits.GuildPresences,GatewayIntentBits.GuildMessages,GatewayIntentBits.GuildMessageReactions,GatewayIntentBits.DirectMessages],partials:[Partials.Message,Partials.Channel,Partials.Reaction]});
 const settings=new Map();const pendingOffline=new Map();const memberQueues=new Map();const activityCooldown=new Map();const activityCleanup=new Map();let confirmationPollRunning=false;
 const randomItems=['rubber duck','spatula','traffic cone','emotional-support potato','garden gnome','squeaky hammer','battle spoon','glittery cactus','enchanted teacup','questionable wizard hat'];
 const randomAnimals=['platypus','capybara','penguin','red panda','axolotl','wombat','quokka','tiny goose','sleepy fox','chaotic raccoon'];
@@ -42,8 +42,8 @@ async function processStreamConfirmations(){
    if(sent.has(stream.id))continue;
    const config=confirmationSettings.find(row=>row.user_id===stream.user_id),connection=connectionByUser.get(stream.user_id);
    if(!config||!connection?.external_user_id)continue;
-   const guild=client.guilds.cache.get(config.guild_id),channel=guild?.channels.cache.get(config.channel_id);
-   if(!guild||!channel?.isTextBased())continue;
+   const guild=client.guilds.cache.get(config.guild_id);
+   if(!guild){await logActivity(config.guild_id,'stream_confirmation_error','warning','Confirmation server unavailable','B.E.I.P.I. is not connected to the selected Discord server.',{streamId:stream.id});continue}
    const {error:claimError}=await supabase.from('stream_confirmation_runs').insert({stream_id:stream.id,user_id:stream.user_id,discord_user_id:connection.external_user_id,status:'claiming'});
    if(claimError){if(claimError.code!=='23505')console.error('[stream-confirmations]',claimError.message);continue}
    try{
