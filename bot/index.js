@@ -20,6 +20,7 @@ const discordTimestamp=value=>Math.floor(new Date(value).getTime()/1000);
 const streamDetails=note=>{try{const value=JSON.parse(note);if(value?.v===1)return {platform:String(value.platform||'stream'),game:String(value.game||''),username:String(value.username||'')}}catch{}return {platform:note||'stream',game:'',username:''}};
 const streamDestination=details=>details.username?`${details.platform} (@${details.username.replace(/^@/,'')})`:details.platform;
 const defaultConfirmationMessage='# Stream in 1 hour!\n\n{username} is streaming {game}, see you soon!\n\n{embed}\n\n@{role}';
+const defaultCancellationMessage='# Stream Cancelled\n\n{username} has cancelled their stream.';
 function streamLinks(details){
  if(details.platform==='Twitch'&&details.username)return `https://twitch.tv/${details.username.replace(/^@/,'')}`;
  if(details.platform==='YouTube'&&details.username){const name=details.username.replace(/^@/,'');return `https://youtube.com/@${name}`}
@@ -93,9 +94,9 @@ async function handleStreamConfirmation(interaction){
  const name=interaction.user.globalName||interaction.user.username,when=discordTimestamp(stream.due),details=streamDetails(stream.note);
  const content=status==='confirmed'
   ?renderConfirmationMessage(config.message_template,stream,details,config)
-  :`🫶 **${name}** has cancelled **${stream.title}**, which was scheduled for <t:${when}:F>.`;
+  :renderConfirmationMessage(config.cancel_message_template||defaultCancellationMessage,stream,details,config);
  try{
-  const message=await client.rest.post(Routes.channelMessages(config.channel_id),{body:{content,allowed_mentions:{parse:[],roles:status==='confirmed'&&config.role_id?[config.role_id]:[]}}});
+  const message=await client.rest.post(Routes.channelMessages(config.channel_id),{body:{content,allowed_mentions:{parse:[],roles:config.role_id?[config.role_id]:[]}}});
   if(!message?.id)throw new Error('Discord did not return a message ID.');
   await supabase.from('stream_confirmation_runs').update({status,responded_at:respondedAt,announcement_message_id:message.id,updated_at:new Date().toISOString()}).eq('id',run.id);
   const resultText=status==='confirmed'?'Perfect — you’re confirmed. I’ve let the server know.':'Got it — I’ve marked this stream as cancelled and let the server know.';
