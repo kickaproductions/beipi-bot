@@ -17,6 +17,8 @@ const ownerDefault='# {streamer} is now live!\n{streamer} is streaming {game} on
 const creatorDefault='# {streamer} is now live!\nStreaming {game} on {platform}.\nCome and say hello\n{url}';
 
 const discordTimestamp=value=>Math.floor(new Date(value).getTime()/1000);
+const streamDetails=note=>{try{const value=JSON.parse(note);if(value?.v===1)return {platform:String(value.platform||'stream'),game:String(value.game||''),username:String(value.username||'')}}catch{}return {platform:note||'stream',game:'',username:''}};
+const streamDestination=details=>details.username?`${details.platform} (@${details.username.replace(/^@/,'')})`:details.platform;
 const confirmationButtons=streamId=>new ActionRowBuilder().addComponents(
  new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:yes`).setLabel('Yes, I’m streaming').setStyle(ButtonStyle.Success),
  new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:no`).setLabel('No, cancel it').setStyle(ButtonStyle.Secondary)
@@ -48,7 +50,7 @@ async function processStreamConfirmations(){
    if(claimError){if(claimError.code!=='23505')console.error('[stream-confirmations]',claimError.message);continue}
    try{
     const user=await client.users.fetch(connection.external_user_id);
-    const when=discordTimestamp(stream.due),message=await user.send({content:`Hi ${connection.display_name||user.displayName}! Your ${stream.note||'stream'} stream **${stream.title}** is scheduled for <t:${when}:F> (<t:${when}:R>).\n\nAre you still going live?`,components:[confirmationButtons(stream.id)]});
+    const when=discordTimestamp(stream.due),details=streamDetails(stream.note),game=details.game?` playing **${details.game}**`:'',message=await user.send({content:`Hi ${connection.display_name||user.displayName}! Your **${stream.title}** stream${game} on ${streamDestination(details)} is scheduled for <t:${when}:F> (<t:${when}:R>).\n\nAre you still going live?`,components:[confirmationButtons(stream.id)]});
     await supabase.from('stream_confirmation_runs').update({status:'pending',dm_message_id:message.id,sent_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('stream_id',stream.id);
     console.log(`[stream-confirmation] Asked ${user.tag} about ${stream.title}.`);
    }catch(error){
@@ -75,9 +77,9 @@ async function handleStreamConfirmation(interaction){
   supabase.from('stream_confirmation_settings').select('*').eq('user_id',run.user_id).maybeSingle()
  ]);
  if(!stream||!config){await supabase.from('stream_confirmation_runs').update({status:'pending',updated_at:new Date().toISOString()}).eq('id',run.id);await interaction.editReply({content:`${interaction.message.content}\n\n**I saved your click, but I could not find the schedule settings. Please try again.**`,components:[confirmationButtons(streamId)]}).catch(()=>{});return}
- const name=interaction.user.globalName||interaction.user.username,when=discordTimestamp(stream.due);
+ const name=interaction.user.globalName||interaction.user.username,when=discordTimestamp(stream.due),details=streamDetails(stream.note),game=details.game?` playing **${details.game}**`:'';
  const content=status==='confirmed'
-  ?`✅ **${name}** has confirmed **${stream.title}** on ${stream.note||'their stream'} for <t:${when}:F>.`
+  ?`✅ **${name}** has confirmed **${stream.title}**${game} on ${streamDestination(details)} for <t:${when}:F>.`
   :`🫶 **${name}** has cancelled **${stream.title}**, which was scheduled for <t:${when}:F>.`;
  try{
   const message=await client.rest.post(Routes.channelMessages(config.channel_id),{body:{content,allowed_mentions:{parse:[]}}});
