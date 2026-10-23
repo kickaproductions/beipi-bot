@@ -1,4 +1,4 @@
-import {ActionRowBuilder,ActivityType,ButtonBuilder,ButtonStyle,Client,Events,GatewayIntentBits,Partials} from 'discord.js';
+import {ActionRowBuilder,ActivityType,ButtonBuilder,ButtonStyle,Client,Events,GatewayIntentBits,Partials,Routes} from 'discord.js';
 import {createClient} from '@supabase/supabase-js';
 
 const discordToken=process.env.DISCORD_BOT_TOKEN||process.env.DISCORD_TOKEN;
@@ -80,17 +80,23 @@ async function handleStreamConfirmation(interaction){
   ?`✅ **${name}** has confirmed **${stream.title}** on ${stream.note||'their stream'} for <t:${when}:F>.`
   :`🫶 **${name}** has cancelled **${stream.title}**, which was scheduled for <t:${when}:F>.`;
  try{
-  const channel=await client.channels.fetch(config.channel_id);
-  if(!channel?.isTextBased()||channel.isDMBased())throw new Error('The selected destination is not a server text channel.');
-  const message=await channel.send({content,allowedMentions:{parse:[]}});
+  const message=await client.rest.post(Routes.channelMessages(config.channel_id),{body:{content,allowed_mentions:{parse:[]}}});
+  if(!message?.id)throw new Error('Discord did not return a message ID.');
   await supabase.from('stream_confirmation_runs').update({status,responded_at:respondedAt,announcement_message_id:message.id,updated_at:new Date().toISOString()}).eq('id',run.id);
   const resultText=status==='confirmed'?'Perfect — you’re confirmed. I’ve let the server know.':'Got it — I’ve marked this stream as cancelled and let the server know.';
   await interaction.editReply({content:`${interaction.message.content}\n\n**${resultText}**`,components:[]}).catch(()=>{});
   await logActivity(config.guild_id,status==='confirmed'?'stream_confirmed':'stream_cancelled','info',status==='confirmed'?'Scheduled stream confirmed':'Scheduled stream cancelled',`${name}: ${stream.title}`,{streamId,channelId:config.channel_id});
  }catch(error){
   await supabase.from('stream_confirmation_runs').update({status:'pending',updated_at:new Date().toISOString()}).eq('id',run.id);
-  const detail=error instanceof Error?error.message:'Discord rejected the message.';
-  await interaction.editReply({content:`${interaction.message.content}\n\n**I couldn’t post in #${config.channel_name||'the selected channel'} yet. Please give B.E.I.P.I. View Channel and Send Messages permission there, then press your answer again.**`,components:[confirmationButtons(streamId)]}).catch(()=>{});
+  const code=Number(error?.code||error?.rawError?.code||0),detail=error?.rawError?.message||error?.message||'Discord rejected the message.';
+  const help=code===50013
+   ?'Discord reports Missing Permissions. Open the channel settings, add the B.E.I.P.I. Bot role directly, and allow View Channel and Send Messages.'
+   :code===50001
+    ?'Discord reports Missing Access. B.E.I.P.I. cannot currently see this channel; check its channel-specific permission overrides.'
+    :code===10003
+     ?'Discord can no longer find this channel. Re-select the scheduling channel in My Crew → Confirmations.'
+     :`Discord returned: ${String(detail).slice(0,180)}`;
+  await interaction.editReply({content:`${interaction.message.content}\n\n**I couldn’t post in #${config.channel_name||'the selected channel'} yet. ${help} Then press your answer again.**`,components:[confirmationButtons(streamId)]}).catch(()=>{});
   console.error('[stream-confirmation-post]',error);
   await logActivity(config.guild_id,'stream_confirmation_error','error','Stream confirmation could not be posted',detail,{streamId,channelId:config.channel_id});
  }
