@@ -1,5 +1,6 @@
 import {createServerClient} from '@supabase/ssr';
 import {NextResponse,type NextRequest} from 'next/server';
+import {NDA_VERSION} from './app/nda-agreement';
 
 export async function proxy(request:NextRequest){
   let response=NextResponse.next({request});
@@ -16,8 +17,12 @@ export async function proxy(request:NextRequest){
         return NextResponse.redirect(new URL('/account?suspended=1',request.url));
       }
       const isTester=Boolean(profile?.founding_tester)||profile?.role==='developer';
-      const isProtectedApi=request.nextUrl.pathname.startsWith('/api/')&&!request.nextUrl.pathname.startsWith('/api/tester-access');
+      const isProtectedApi=request.nextUrl.pathname.startsWith('/api/')&&!request.nextUrl.pathname.startsWith('/api/tester-access')&&!request.nextUrl.pathname.startsWith('/api/tester-nda');
       if(!isTester&&isProtectedApi)return NextResponse.json({error:'Private beta access is required for this feature.'},{status:403});
+      if(isTester&&isProtectedApi){
+        const {data:acceptance,error:acceptanceError}=await supabase.from('beta_nda_acceptances').select('id').eq('user_id',user.id).eq('agreement_version',NDA_VERSION).maybeSingle();
+        if(!acceptanceError&&!acceptance)return NextResponse.json({error:'Please accept the beta NDA in the Tester Portal before using this feature.'},{status:403});
+      }
     }
   }catch{
     // Keep the public site available if account configuration is incomplete.
