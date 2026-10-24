@@ -50,7 +50,7 @@
 @media(min-width:1450px){.mascot::before{width:395px;height:395px}.mascot{width:400px !important;margin-bottom:-88px}}
 @media(max-width:1100px){.mascot::before{width:320px;height:320px}.mascot{width:325px !important;margin-bottom:-70px}}
 @media(max-width:850px){.mascot::before{width:250px;height:250px}.mascot{width:250px !important;margin-bottom:-54px}}
-@media(max-width:650px){.mascot::before{width:185px;height:185px}.mascot{width:180px !important;margin-bottom:-40px}}
+@media(max-width:650px){.hero{min-height:455px;padding:23px 20px 190px}.hero-copy{max-width:100%}.hero p{max-width:none}.hero:after{width:230px;height:230px;right:50%;bottom:-58px;transform:translateX(50%)}.mascot::before{width:205px;height:175px;background-position:center bottom}.mascot{width:205px !important;right:50%;bottom:0;margin-bottom:0;transform:translateX(50%) !important}}
 
 /* Cosy dark mode — default, with a user-controlled light-mode escape hatch */
 .topbar-actions{display:flex;align-items:center;gap:9px}
