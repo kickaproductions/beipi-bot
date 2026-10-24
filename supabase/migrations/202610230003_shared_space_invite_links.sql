@@ -10,7 +10,7 @@ create index if not exists crew_invitations_token_idx on public.crew_invitations
 drop function if exists public.invite_crew_moderator(text);
 
 create or replace function public.create_crew_invite_link()
-returns jsonb language plpgsql security definer set search_path=public as $$
+returns jsonb language plpgsql security definer set search_path=public,extensions as $$
 declare
   caller_id uuid:=auth.uid();
   raw_token text;
@@ -35,7 +35,7 @@ end;
 $$;
 
 create or replace function public.accept_crew_invite_link(invite_token text)
-returns jsonb language plpgsql security definer set search_path=public as $$
+returns jsonb language plpgsql security definer set search_path=public,extensions as $$
 declare
   caller_id uuid:=auth.uid();
   invitation public.crew_invitations;
@@ -92,3 +92,5 @@ $$;
 
 grant execute on function public.create_crew_invite_link() to authenticated;
 grant execute on function public.accept_crew_invite_link(text) to authenticated;
+
+notify pgrst, 'reload schema';
