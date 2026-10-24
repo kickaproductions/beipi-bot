@@ -46,7 +46,7 @@
   border-radius: 999px;
   background: #211828;
   color: #d9c4e5;
-  font-size: .62rem !important;
+  font-size: .72rem !important;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -77,7 +77,8 @@
 }
 
 .calendar :global(.crew-day-tooltip > strong) {
-  font-size: .76rem;
+  font-size: .85rem;
+  font-weight: 700;
 }
 
 .calendar :global(.crew-day-tooltip article) {
@@ -92,14 +93,15 @@
   padding: 0 !important;
   background: transparent !important;
   color: #f4edf7 !important;
-  font-size: .76rem !important;
+  font-size: .82rem !important;
   font-weight: 750;
   white-space: normal;
 }
 
 .calendar :global(.crew-day-tooltip article small) {
-  color: #ad9fb5;
-  font-size: .67rem;
+  color: #c1b5c7;
+  font-size: .75rem;
+  font-weight: 500;
 }
 
 .calendar :global(.crew-day:nth-child(7n+1) .crew-day-tooltip),
@@ -132,7 +134,7 @@
 
 .connectedAccount strong,
 .missingAccount strong {
-  font-size: .72rem;
+  font-size: .8rem;
 }
 
 .connectedAccount span,
@@ -183,7 +185,8 @@
 }
 
 .confirmationEditor strong {
-  font-size: .78rem;
+  font-size: .88rem;
+  font-weight: 700;
 }
 
 .confirmationEditor select {
@@ -193,7 +196,7 @@
   border-radius: 8px;
   background: #19141f;
   color: #e9e0ee;
-  font-size: .68rem;
+  font-size: .82rem;
 }
 
 .confirmationEditor textarea {
@@ -205,7 +208,7 @@
   border-radius: 9px;
   background: #19141f;
   color: #f4edf7;
-  font: .78rem/1.55 Arial, "Helvetica Neue", sans-serif;
+  font: .9rem/1.6 Arial, "Helvetica Neue", sans-serif;
   outline: none;
 }
 
@@ -215,8 +218,9 @@
 }
 
 .confirmationEditor > small {
-  color: #9f92a7;
-  font-size: .64rem;
+  color: #bdb1c4;
+  font-size: .76rem;
+  font-weight: 500;
 }
 
 .confirmationPreview {
@@ -229,8 +233,8 @@
 }
 
 .confirmationPreview > span {
-  color: #9ca0a8;
-  font-size: .58rem;
+  color: #c0c3c9;
+  font-size: .72rem;
   font-weight: 800;
   letter-spacing: .08em;
 }
@@ -238,7 +242,7 @@
 .confirmationPreview pre {
   margin: 0;
   color: #f2f3f5;
-  font: .76rem/1.55 Arial, "Helvetica Neue", sans-serif;
+  font: .88rem/1.6 Arial, "Helvetica Neue", sans-serif;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

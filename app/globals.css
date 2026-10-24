@@ -389,3 +389,141 @@ body{font-size:16px}
 
 .shared-invite-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:16px 18px 10px}.shared-invite-steps span{display:flex;align-items:center;gap:7px;padding:10px;border:1px solid #40334b;border-radius:9px;background:#19141f;color:#cfc3d4;font-size:.7rem}.shared-invite-steps b{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#342742;color:#d0b8e3}.shared-create-link{margin:0 18px 16px;min-height:42px}.shared-invite-link{display:grid;grid-template-columns:1fr auto;gap:8px;padding:0 18px 16px}.shared-invite-link input{height:40px;min-width:0;padding:0 11px;border:1px solid #4a3a55;border-radius:8px;background:#19141f;color:#d7c9df}.shared-invite-link button{min-height:40px}.shared-invite-link small{grid-column:1/-1;color:#a99daf;font-size:.66rem}.crew-invite-shell{min-height:100vh}.crew-invite-card .account-state{padding-top:25px}.crew-invite-icon{display:grid;place-items:center;width:58px;height:58px;margin:0 auto 15px;border-radius:17px;background:#342742;color:#d0b8e3}.crew-invite-icon svg{width:27px;height:27px}
 @media(max-width:650px){.shared-invite-steps{grid-template-columns:1fr}.shared-invite-link{grid-template-columns:1fr}.shared-invite-link small{grid-column:auto}.shared-create-link{width:calc(100% - 36px)}}
+
+/* Unified typography — one clear, readable system across every page */
+:root{
+  --type-family:Arial,"Helvetica Neue",Helvetica,sans-serif;
+  --type-body:1rem;
+  --type-supporting:.9rem;
+  --type-label:.8rem;
+  --type-section:1.2rem;
+  --type-page:clamp(2rem,4vw,3rem);
+}
+html{font-size:16px}
+body,
+button,
+input,
+select,
+textarea{font-family:var(--type-family)}
+body{font-size:var(--type-body);font-weight:400;line-height:1.6}
+:is(.shell,.landing-shell,.account-shell,.security-shell,.developer-shell,.tester-shell,.crew-invite-shell){font-family:var(--type-family)}
+:is(.shell,.landing-shell,.account-shell,.security-shell,.developer-shell,.tester-shell,.crew-invite-shell) :is(h1,h2,h3,h4,h5,h6,.brand){font-family:var(--type-family);font-weight:700;line-height:1.2}
+:is(.shell,.landing-shell,.account-shell,.security-shell,.developer-shell,.tester-shell,.crew-invite-shell) :is(p,li,label,input,select,textarea,button){line-height:1.55}
+
+/* Dashboard headings, card copy and navigation */
+.shell h1{font-size:var(--type-page);font-weight:700}
+.shell .hero h2{font-size:clamp(1.8rem,3vw,2.25rem);font-weight:700}
+.shell .card-heading h2,
+.shell .stream-summary h2,
+.shell .analytics-preview h2,
+.shell .discord-section-intro h2,
+.shell .crew-workspace .card>header h2{font-weight:700}
+.shell .stream-summary h2{font-size:1.5rem}
+.shell .stream-summary small,
+.shell .eyebrow,
+.shell .pill,
+.shell .nav-label{font-size:var(--type-label);font-weight:700;letter-spacing:.09em}
+.shell .stream-summary p,
+.shell .hero p,
+.shell .analytics-preview p,
+.shell .page-heading p,
+.shell .card-heading p,
+.shell .discord-section-intro p,
+.shell .crew-workspace .card>header p{font-size:var(--type-supporting);font-weight:500;line-height:1.6}
+.shell nav button,
+.shell .primary,
+.shell .outline,
+.shell .hero-button,
+.shell .text-button,
+.shell .tabs button,
+.shell .stream-tabs button{font-size:.9rem;font-weight:700}
+.shell .brand{font-weight:700}
+.shell .brand small,
+.shell .profile small,
+.shell .profile a,
+.shell .crumb,
+.shell .quiet{font-weight:500}
+
+/* Forms and editors */
+.shell :is(.modal,.form-fields,.crew-schedule-modal,.stream-confirm-settings,.shared-crew-wrap) label{font-size:.9rem;font-weight:700}
+.shell :is(.modal,.form-fields,.crew-schedule-modal,.stream-confirm-settings,.shared-crew-wrap) :is(input,select,textarea){font-size:.95rem;line-height:1.55}
+.shell :is(.modal,.form-fields,.crew-schedule-modal,.stream-confirm-settings,.shared-crew-wrap) small{font-size:.78rem;font-weight:500;line-height:1.5}
+.shell .field-help,
+.shell .stream-confirm-note,
+.shell .stream-confirm-error{font-size:.8rem;font-weight:500;line-height:1.55}
+.shell .live-template-heading label,
+.shell .reaction-heading,
+.shell .reaction-row label{font-weight:700}
+
+/* Discord setup, cards and status copy */
+.shell .discord-section-button strong,
+.shell .setup-choice h2,
+.shell .saved-discord strong,
+.shell .reaction-home-header strong,
+.shell .reaction-home-accordion strong{font-weight:700}
+.shell .discord-section-button small,
+.shell .setup-choice p,
+.shell .saved-discord p,
+.shell .saved-discord small,
+.shell .reaction-home-header small,
+.shell .reaction-home-accordion small{font-size:.82rem;font-weight:500;line-height:1.55}
+.shell .status,
+.shell .draft-count,
+.shell .required-note,
+.shell .current-badge,
+.shell .reaction-count{font-size:.75rem;font-weight:700}
+
+/* Crew, schedules and shared spaces */
+.shell .crew-weekday{font-size:.72rem;color:#b9adc1}
+.shell .crew-month-controls strong,
+.shell .crew-add,
+.shell .crew-schedule-tabs button{font-size:.82rem;font-weight:700}
+.shell .crew-list strong,
+.shell .shared-note-list strong,
+.shell .shared-invite-list b,
+.shell .shared-incoming strong{font-size:.9rem;font-weight:700}
+.shell .crew-list small,
+.shell .shared-note-list p,
+.shell .shared-invite-list small,
+.shell .shared-incoming small,
+.shell .shared-space-heading p{font-size:.78rem;font-weight:500;line-height:1.5}
+.shell .crew-date small{font-size:.7rem!important;font-weight:700}
+.shell .stream-confirm-heading strong,
+.shell .stream-confirm-switch strong{font-size:.88rem;font-weight:700}
+.shell .stream-confirm-heading p,
+.shell .stream-confirm-switch small,
+.shell .stream-confirm-destination{font-size:.8rem;font-weight:500}
+.shell .stream-confirm-status{font-size:.72rem!important}
+.shell .shared-invite-steps span,
+.shell .shared-invite-list>strong,
+.shell .shared-invite-link small{font-size:.76rem;font-weight:600}
+
+/* Public, account, tester and developer pages */
+.landing-shell p,
+.account-shell p,
+.security-shell p,
+.developer-shell p,
+.tester-shell p,
+.crew-invite-shell p{font-size:1rem;font-weight:400;line-height:1.65}
+.landing-shell :is(.landing-eyebrow,.landing-section-head>span,.landing-promise-title>span,.landing-cta>span,.landing-kicker),
+.account-shell .account-kicker,
+.security-shell .security-kicker,
+.developer-shell :is(.developer-kicker,.developer-heading>div>span),
+.tester-shell :is(.tester-kicker,.tester-status){font-size:.8rem;font-weight:700}
+.account-shell :is(label,button,input),
+.security-shell :is(label,button,input),
+.tester-shell :is(label,button,input,select,textarea),
+.developer-shell :is(label,button,input,select,textarea){font-size:.95rem}
+.account-shell :is(.account-brand small,.account-trust,.account-footer),
+.security-shell :is(.security-brand small,.security-note),
+.tester-shell small,
+.developer-shell small{font-size:.82rem;font-weight:500;line-height:1.5}
+.developer-shell :is(.developer-topbar a,.developer-topbar span,.developer-summary span,.developer-grid p,.developer-heading p){font-weight:500}
+
+@media(max-width:650px){
+  .shell h1{font-size:2rem}
+  .shell .stream-summary h2{font-size:1.4rem}
+  .shell .stream-summary p,
+  .shell .card-heading p,
+  .shell .crew-workspace .card>header p{font-size:.88rem}
+}
