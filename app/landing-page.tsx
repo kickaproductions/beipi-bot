@@ -10,6 +10,6 @@ export default function LandingPage(){
       <section className="landing-wrap landing-promise" id="promise"><div className="landing-promise-title"><span>Made for human brains</span><h2>A companion,<br/>not another chore.</h2></div><div className="landing-promise-list"><article><h3>Calm by design</h3><p>A focused view keeps what matters in front of you, without clutter competing for your attention.</p></article><article><h3>You stay in control</h3><p>Choose what to connect and which tools belong in your workflow.</p></article><article><h3>Growing with streamers</h3><p>B.E.I.P.I. is being shaped by content creators and streamers.</p></article></div></section>
       <section className="landing-wrap landing-section"><div className="landing-cta"><span>Ready when you are</span><h2>Come meet your<br/>new co-pilot.</h2><p>Connect your stream, settle in, and let B.E.I.P.I. help carry the mental load.</p><a className="landing-button primary" href="/account?mode=signup">Get started</a></div></section>
     </main>
-    <footer className="landing-wrap landing-footer"><span>© 2026 B.E.I.P.I. Bot</span><span>Your stream. Your community. Your companion.</span><span>Privacy · Terms</span></footer>
+    <footer className="landing-wrap landing-footer"><span>© 2026 B.E.I.P.I. Bot</span><span>Your stream. Your community. Your companion.</span><nav aria-label="Legal pages"><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/nda">Beta NDA</a></nav></footer>
   </div>
 }
