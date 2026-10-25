@@ -10,10 +10,18 @@ async function signedIn(){
   return {supabase,user,error};
 }
 
-export async function GET(){
+export async function GET(request:Request){
   try{
     const {supabase,user,error:authError}=await signedIn();
     if(authError||!user)return json({error:'Please sign in to open your saved space.'},401);
+    const pastStreamsBefore=new URL(request.url).searchParams.get('pastStreamsBefore');
+    if(pastStreamsBefore){
+      const cutoff=new Date(pastStreamsBefore);
+      if(!Number.isNaN(cutoff.getTime())){
+        const {error:cleanupError}=await supabase.from('companion_items').delete().eq('user_id',user.id).eq('kind','crew-stream').lt('due',cutoff.toISOString());
+        if(cleanupError)throw cleanupError;
+      }
+    }
     const {data,error}=await supabase.from('companion_items').select('id,kind,title,note,due,done,created_at').order('created_at',{ascending:false});
     if(error)throw error;
     return json((data as ItemRow[]).map(present));
