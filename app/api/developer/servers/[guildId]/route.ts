@@ -12,5 +12,7 @@ export async function GET(_request:Request,{params}:{params:Promise<{guildId:str
   const {data,error}=await supabase.rpc('get_admin_server_detail',{target_guild_id:guildId});
   if(error)return Response.json({error:'Server details could not be loaded. Run the server-management migration if it has not been applied yet.'},{status:500});
   if(!data)return Response.json({error:'This B.E.I.P.I. server could not be found.'},{status:404});
-  return Response.json({server:data},{headers:{'Cache-Control':'no-store'}});
+  const server=data as {owner?:{id?:string;name?:string}|null};
+  if(server.owner?.id){const {data:owner}=await supabase.from('profiles').select('username').eq('id',server.owner.id).maybeSingle();if(owner?.username)server.owner.name=owner.username}
+  return Response.json({server},{headers:{'Cache-Control':'no-store'}});
 }

@@ -16,10 +16,12 @@ export async function GET(){
   if(accessError)return accessError;
   const {data,error}=await supabase.rpc('get_admin_servers');
   if(error)return Response.json({error:'Server information could not be loaded. Run the server-management migration if it has not been applied yet.'},{status:500});
+  const {data:profiles}=await supabase.from('profiles').select('email,username').not('username','is',null);
+  const usernames=new Map((profiles||[]).map(profile=>[profile.email,profile.username]));
   const servers=((data||[]) as Record<string,unknown>[]).map(row=>({
     guildId:row.guild_id,guildName:row.guild_name,botActive:row.bot_active,memberCount:row.member_count,
     installedAt:row.installed_at,lastSeenAt:row.last_seen_at,setupComplete:row.setup_complete,
-    liveEnabled:row.live_enabled,ownerName:row.owner_name,ownerEmail:row.owner_email
+    liveEnabled:row.live_enabled,ownerName:usernames.get(String(row.owner_email||''))||row.owner_name,ownerEmail:row.owner_email
   }));
   return Response.json({servers},{headers:{'Cache-Control':'no-store'}});
 }
