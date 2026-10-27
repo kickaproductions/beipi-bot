@@ -10,7 +10,7 @@ alter table public.profiles
 
 alter table public.profiles
   add constraint profiles_username_format
-  check (username is null or username ~ '^[a-z0-9_]{3,24}$');
+  check (username is null or username ~ '^[A-Za-z0-9_]{3,24}$');
 
 create or replace function public.update_my_username(new_username text)
 returns text
@@ -19,12 +19,12 @@ security definer
 set search_path=public
 as $$
 declare
-  cleaned text:=lower(trim(coalesce(new_username,'')));
+  cleaned text:=trim(coalesce(new_username,''));
 begin
-  if cleaned !~ '^[a-z0-9_]{3,24}$' then
+  if cleaned !~ '^[A-Za-z0-9_]{3,24}$' then
     raise exception 'Username must be 3–24 characters using letters, numbers or underscores.';
   end if;
-  if exists(select 1 from public.profiles where lower(username)=cleaned and id<>auth.uid()) then
+  if exists(select 1 from public.profiles where lower(username)=lower(cleaned) and id<>auth.uid()) then
     raise exception 'That username is already taken.';
   end if;
   update public.profiles set username=cleaned,updated_at=now() where id=auth.uid();
