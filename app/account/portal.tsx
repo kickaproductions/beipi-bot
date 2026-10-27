@@ -2,7 +2,7 @@
 
 import {useEffect,useState,type FormEvent} from 'react';
 import type {User} from '@supabase/supabase-js';
-import {ArrowLeft,Check,Eye,EyeOff,LogOut,Mail,ShieldCheck} from 'lucide-react';
+import {ArrowLeft,Check,Eye,EyeOff,Fingerprint,LogOut,Mail,ShieldCheck} from 'lucide-react';
 import {createClient} from '@/lib/supabase/client';
 
 type Mode='login'|'signup';
@@ -98,6 +98,21 @@ export default function AccountPortal(){
     }
   }
 
+  async function passkeySignIn(){
+    setBusy(true);
+    setError('');
+    try{
+      if(!window.PublicKeyCredential)throw new Error('This browser or device does not support passkeys yet.');
+      const supabase=createClient();
+      const {error}=await supabase.auth.signInWithPasskey();
+      if(error)throw error;
+      window.location.assign(next);
+    }catch(value){
+      const text=value instanceof Error?value.message:'Passkey sign-in could not be completed.';
+      setError(text.includes('cancel')||text.includes('not allowed')?'Passkey sign-in was cancelled. You can try again whenever you’re ready.':text);
+    }finally{setBusy(false)}
+  }
+
   async function signOut(){
     setBusy(true);
     try{
@@ -128,6 +143,7 @@ export default function AccountPortal(){
         <span className="account-kicker">{mode==='signup'?'MAKE YOUR HOME BASE':'WELCOME BACK'}</span>
         <h1>{mode==='signup'?'Create your account':'Log in to B.E.I.P.I.'}</h1>
         <p className="account-lead">{mode==='signup'?'One account for your dashboard, connections and future Founding Tester access.':next.startsWith('/crew-invite')?'Sign in to accept your shared-space invitation.':'Your stream, community and little co-pilot are waiting.'}</p>
+        {mode==='login'&&<button className="account-passkey" disabled={busy} onClick={()=>void passkeySignIn()}><Fingerprint size={19}/> Continue with a passkey</button>}
         <div className="account-social"><button disabled={busy} onClick={()=>void social('google')}><b>G</b> Continue with Google</button><button disabled={busy} onClick={()=>void social('twitch')}><b>T</b> Continue with Twitch</button><button disabled={busy} onClick={()=>void social('discord')}><b>D</b> Continue with Discord</button></div>
         <div className="account-divider"><span>or use email</span></div>
         <form onSubmit={submit}>
