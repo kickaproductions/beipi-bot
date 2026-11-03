@@ -247,6 +247,56 @@
   overflow-wrap: anywhere;
 }
 
+:global(.light-theme) .connectedAccount,
+:global(.light-theme) .missingAccount {
+  border-color: #ddd3e5;
+  background: #fbf9fc;
+}
+
+:global(.light-theme) .connectedAccount {
+  border-color: #b9d8c8;
+  background: #eef8f2;
+}
+
+:global(.light-theme) .connectedAccount strong {
+  color: #3d7458;
+}
+
+:global(.light-theme) .connectedAccount span {
+  color: #355441;
+}
+
+:global(.light-theme) .missingAccount {
+  border-color: #dfc9b9;
+  background: #fff7f0;
+}
+
+:global(.light-theme) .missingAccount strong {
+  color: #8b5838;
+}
+
+:global(.light-theme) .missingAccount span {
+  color: #6f5b4e;
+}
+
+:global(.light-theme) .confirmationEditor {
+  border-color: #ddd3e5;
+  background: #fff;
+  color: #302944;
+}
+
+:global(.light-theme) .confirmationEditor select,
+:global(.light-theme) .confirmationEditor textarea {
+  border-color: #ddd3e5;
+  background: #fbf9fc;
+  color: #302944;
+  color-scheme: light;
+}
+
+:global(.light-theme) .confirmationEditor > small {
+  color: #756c83;
+}
+
 @media (max-width: 650px) {
   .calendar :global(.crew-day > b) {
     width: 27px;
