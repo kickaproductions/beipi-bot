@@ -782,6 +782,48 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
   color:#45265e;
 }
 
+/* Shared-space invitations follow light mode instead of forcing dark cards. */
+.light-theme .shared-invite-card,
+.light-theme .shared-incoming{
+  border-color:var(--line)!important;
+  background:#fff!important;
+  color:var(--ink)!important;
+}
+.light-theme .shared-invite-card>header,
+.light-theme .shared-incoming>header{
+  border-color:var(--line);
+}
+.light-theme .shared-invite-card>header p,
+.light-theme .shared-incoming>header p{
+  color:var(--muted);
+}
+.light-theme .shared-invite-steps span{
+  border-color:#e4dbea;
+  background:#fbf9fc;
+  color:var(--ink);
+}
+.light-theme .shared-invite-steps b{
+  background:#eee5f6;
+  color:#68448a;
+}
+.light-theme .shared-invite-link input{
+  border-color:#ddd3e5;
+  background:#fbf9fc;
+  color:var(--ink);
+}
+.light-theme .shared-invite-link small,
+.light-theme .shared-invite-list>strong,
+.light-theme .shared-invite-list small,
+.light-theme .shared-incoming small{
+  color:var(--muted);
+}
+.light-theme .shared-invite-list article,
+.light-theme .shared-incoming>article{
+  border-color:#e4dbea;
+  background:#fbf9fc;
+  color:var(--ink);
+}
+
 /* Public inclusion promise */
 .landing-inclusive{margin-bottom:72px;padding:30px 34px;border:1px solid var(--landing-line);border-radius:24px;background:linear-gradient(145deg,rgba(208,184,227,.12),rgba(38,29,48,.74));scroll-margin-top:90px}.landing-inclusive-heading{display:flex;align-items:center;gap:14px;margin-bottom:18px}.landing-inclusive-heading>span{width:43px;height:43px;display:grid;place-items:center;flex:0 0 auto;border-radius:11px;background:#3a2947;color:#c79bea;font-size:1.35rem;font-weight:800}.landing-inclusive .landing-kicker{margin-bottom:4px}.landing-inclusive h2{font-size:1.25rem;margin:0}.landing-inclusive-copy{display:grid;gap:12px}.landing-inclusive-copy p{max-width:940px;margin:0;color:var(--landing-muted);font-size:.92rem}.landing-inclusive-copy strong{color:#fff}.landing-inclusive-closing{display:block;margin-top:3px;color:var(--landing-lilac)!important;font-family:Outfit,'DM Sans',sans-serif;font-size:1rem}@media(max-width:650px){.landing-inclusive{padding:24px 20px;margin-bottom:48px}}
 
