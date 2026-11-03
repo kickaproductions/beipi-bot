@@ -297,6 +297,19 @@
   color: #756c83;
 }
 
+:global(.light-theme) .confirmationPreview {
+  border: 1px solid #e0d5e7;
+  background: #f2ecf7;
+}
+
+:global(.light-theme) .confirmationPreview > span {
+  color: #76598d;
+}
+
+:global(.light-theme) .confirmationPreview pre {
+  color: #302944;
+}
+
 @media (max-width: 650px) {
   .calendar :global(.crew-day > b) {
     width: 27px;
