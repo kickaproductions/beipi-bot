@@ -745,6 +745,43 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
   border-color:#e8e1ed;
 }
 
+/* Platform journey cards use the dashboard's light palette in light mode. */
+.light-theme .crew-milestone-heading,
+.light-theme .crew-imported-milestones article{
+  border-color:#e4dbea;
+  background:#fff;
+  color:var(--ink);
+}
+.light-theme .crew-milestone-heading{
+  background:#f0e8f9;
+  color:#68448a;
+}
+.light-theme .crew-milestone-heading small,
+.light-theme .crew-imported-milestones article time,
+.light-theme .crew-imported-milestones>p,
+.light-theme .crew-milestone-loading{
+  color:var(--muted);
+}
+.light-theme .crew-imported-milestones article span{
+  background:#eee5f6;
+  color:#68448a;
+}
+
+/* The legal footer is a sibling of the dashboard shell, so inherit its theme
+   through the shared layout wrapper rather than forcing the dark palette. */
+#main-content:has(.shell.light-theme)>.site-legal-footer{
+  border-top-color:#e4dbea;
+  background:#fff;
+  color:#746a7d;
+}
+#main-content:has(.shell.light-theme)>.site-legal-footer a{
+  color:#68448a;
+  text-decoration-color:#8058b766;
+}
+#main-content:has(.shell.light-theme)>.site-legal-footer a:hover{
+  color:#45265e;
+}
+
 /* Public inclusion promise */
 .landing-inclusive{margin-bottom:72px;padding:30px 34px;border:1px solid var(--landing-line);border-radius:24px;background:linear-gradient(145deg,rgba(208,184,227,.12),rgba(38,29,48,.74));scroll-margin-top:90px}.landing-inclusive-heading{display:flex;align-items:center;gap:14px;margin-bottom:18px}.landing-inclusive-heading>span{width:43px;height:43px;display:grid;place-items:center;flex:0 0 auto;border-radius:11px;background:#3a2947;color:#c79bea;font-size:1.35rem;font-weight:800}.landing-inclusive .landing-kicker{margin-bottom:4px}.landing-inclusive h2{font-size:1.25rem;margin:0}.landing-inclusive-copy{display:grid;gap:12px}.landing-inclusive-copy p{max-width:940px;margin:0;color:var(--landing-muted);font-size:.92rem}.landing-inclusive-copy strong{color:#fff}.landing-inclusive-closing{display:block;margin-top:3px;color:var(--landing-lilac)!important;font-family:Outfit,'DM Sans',sans-serif;font-size:1rem}@media(max-width:650px){.landing-inclusive{padding:24px 20px;margin-bottom:48px}}
 
