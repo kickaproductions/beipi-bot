@@ -31,12 +31,21 @@ export default function AccountPortal(){
 
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
+    const sessionExpired=params.get('session')==='expired';
     if(params.get('mode')==='signup')setMode('signup');
     if(params.get('suspended')==='1')setSuspended(true);
     const requested=params.get('next');
     if(requested?.startsWith('/')&&!requested.startsWith('//'))setNext(requested);
     try{
       const supabase=createClient();
+      if(sessionExpired){
+        void supabase.auth.signOut({scope:'local'}).then(()=>{
+          setUser(null);
+          setAccountName('');
+          setMessage('It’s been one week, so B.E.I.P.I. has safely signed you out. Log in again to continue.');
+        });
+        return;
+      }
       const applyUser=async(nextUser:User|null)=>{
         setUser(nextUser);
         if(!nextUser){setAccountName('');return}
