@@ -5,7 +5,7 @@ import type {User} from '@supabase/supabase-js';
 import {ArrowLeft,Check,Eye,EyeOff,Fingerprint,LogOut,Mail,ShieldCheck} from 'lucide-react';
 import {createClient} from '@/lib/supabase/client';
 
-type Mode='login'|'signup';
+type Mode='login'|'signup'|'recover';
 
 const passwordRules=[
   {label:'At least 12 characters',test:(value:string)=>value.length>=12},
@@ -34,6 +34,8 @@ export default function AccountPortal(){
     const sessionExpired=params.get('session')==='expired';
     if(params.get('mode')==='signup')setMode('signup');
     if(params.get('suspended')==='1')setSuspended(true);
+    if(params.get('password')==='updated')setMessage('Your password has been updated. You can log in with it now.');
+    if(params.get('recovery')==='expired')setError('That password-reset link has expired or was already used. Request a new one below.');
     const requested=params.get('next');
     if(requested?.startsWith('/')&&!requested.startsWith('//'))setNext(requested);
     try{
@@ -77,7 +79,12 @@ export default function AccountPortal(){
     const name=String(form.get('name')||'');
     try{
       const supabase=createClient();
-      if(mode==='signup'){
+      if(mode==='recover'){
+        const redirectTo=`${window.location.origin}/auth/callback?next=${encodeURIComponent('/account/reset-password')}`;
+        const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo});
+        if(error)throw error;
+        setMessage('If an account uses that email, B.E.I.P.I. has sent a secure reset link.');
+      }else if(mode==='signup'){
         if(!passwordRules.every(rule=>rule.test(submittedPassword)))throw new Error('Choose a password that meets every requirement.');
         if(submittedPassword!==confirmPassword)throw new Error('Those passwords do not match yet.');
         const {data,error}=await supabase.auth.signUp({email,password:submittedPassword,options:{data:{display_name:name},emailRedirectTo:callbackUrl()}});
@@ -149,16 +156,16 @@ export default function AccountPortal(){
       :suspended?<div className="account-state"><ShieldCheck size={31}/><h1>Account suspended.</h1><p>Dashboard access is paused. Contact B.E.I.P.I. support if you believe this is a mistake.</p><button className="outline" disabled={busy} onClick={()=>void signOut()}><LogOut size={16}/> Sign out</button></div>
       :user?<div className="account-state account-signed-in"><h1>{accountName?`Welcome, ${accountName}.`:'Welcome aboard.'}</h1><p>You’re signed in as <strong>{user.email}</strong>.</p><a className="primary account-dashboard" href={next}>{next.startsWith('/crew-invite')?'Continue to invitation':'Open your dashboard'}</a><button className="outline account-sign-out" disabled={busy} onClick={()=>void signOut()}><LogOut size={16}/> Sign out</button></div>
       :<>
-        <span className="account-kicker">{mode==='signup'?'MAKE YOUR HOME BASE':'WELCOME BACK'}</span>
-        <h1>{mode==='signup'?'Create your account':'Log in to B.E.I.P.I.'}</h1>
-        <p className="account-lead">{mode==='signup'?'One account for your dashboard, connections and future Founding Tester access.':next.startsWith('/crew-invite')?'Sign in to accept your shared-space invitation.':'Your stream, community and little co-pilot are waiting.'}</p>
+        <span className="account-kicker">{mode==='signup'?'MAKE YOUR HOME BASE':mode==='recover'?'ACCOUNT RECOVERY':'WELCOME BACK'}</span>
+        <h1>{mode==='signup'?'Create your account':mode==='recover'?'Reset your password':'Log in to B.E.I.P.I.'}</h1>
+        <p className="account-lead">{mode==='signup'?'One account for your dashboard, connections and future Founding Tester access.':mode==='recover'?'Enter your account email and B.E.I.P.I. will send you a secure reset link.':next.startsWith('/crew-invite')?'Sign in to accept your shared-space invitation.':'Your stream, community and little co-pilot are waiting.'}</p>
         {mode==='login'&&<button className="account-passkey" disabled={busy} onClick={()=>void passkeySignIn()}><Fingerprint size={19}/> Continue with a passkey</button>}
-        <div className="account-social"><button disabled={busy} onClick={()=>void social('google')}><b>G</b> Continue with Google</button><button disabled={busy} onClick={()=>void social('twitch')}><b>T</b> Continue with Twitch</button><button disabled={busy} onClick={()=>void social('discord')}><b>D</b> Continue with Discord</button></div>
-        <div className="account-divider"><span>or use email</span></div>
+        {mode!=='recover'&&<><div className="account-social"><button disabled={busy} onClick={()=>void social('google')}><b>G</b> Continue with Google</button><button disabled={busy} onClick={()=>void social('twitch')}><b>T</b> Continue with Twitch</button><button disabled={busy} onClick={()=>void social('discord')}><b>D</b> Continue with Discord</button></div><div className="account-divider"><span>or use email</span></div></>}
         <form onSubmit={submit}>
           {mode==='signup'&&<label>Display name<input name="name" required maxLength={60} autoComplete="name" placeholder="What should B.E.I.P.I. call you?"/></label>}
           <label>Email<div className="account-input"><Mail size={17}/><input name="email" required type="email" autoComplete="email" placeholder="you@example.com"/></div></label>
-          <label>Password<div className="account-input"><input name="password" required type={showPassword?'text':'password'} autoComplete={mode==='signup'?'new-password':'current-password'} minLength={mode==='signup'?12:8} value={password} onChange={event=>setPassword(event.target.value)} placeholder={mode==='signup'?'Create a strong password':'Your password'}/><button type="button" aria-label={showPassword?'Hide password':'Show password'} onClick={()=>setShowPassword(!showPassword)}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div></label>
+          {mode!=='recover'&&<label>Password<div className="account-input"><input name="password" required type={showPassword?'text':'password'} autoComplete={mode==='signup'?'new-password':'current-password'} minLength={mode==='signup'?12:8} value={password} onChange={event=>setPassword(event.target.value)} placeholder={mode==='signup'?'Create a strong password':'Your password'}/><button type="button" aria-label={showPassword?'Hide password':'Show password'} onClick={()=>setShowPassword(!showPassword)}>{showPassword?<EyeOff size={17}/>:<Eye size={17}/>}</button></div></label>}
+          {mode==='login'&&<button type="button" className="account-forgot" onClick={()=>{setMode('recover');setError('');setMessage('')}}>Forgot password?</button>}
           {mode==='signup'&&<>
             <div className={`password-strength strength-${passedRules}`} aria-live="polite"><div><span style={{width:`${passedRules*20}%`}}/></div><strong>{strength}</strong></div>
             <ul className="password-checklist" aria-label="Password requirements">{passwordRules.map(rule=>{const passed=rule.test(password);return <li className={passed?'passed':''} key={rule.label}><span><Check size={12}/></span>{rule.label}</li>})}</ul>
@@ -167,10 +174,10 @@ export default function AccountPortal(){
           </>}
           {error&&<div className="account-error" role="alert">{error}</div>}
           {message&&<div className="account-message" role="status">{message}</div>}
-          <button className="primary account-submit" disabled={busy||(mode==='signup'&&(passedRules<passwordRules.length||password!==confirmPassword))}>{busy?'One moment…':mode==='signup'?'Create my account':'Log in'}</button>
+          <button className="primary account-submit" disabled={busy||(mode==='signup'&&(passedRules<passwordRules.length||password!==confirmPassword))}>{busy?'One moment…':mode==='signup'?'Create my account':mode==='recover'?'Send reset link':'Log in'}</button>
           {mode==='signup'&&<p className="account-legal">By creating an account, you agree to the <a href="/terms">Terms of Service</a> and acknowledge the <a href="/privacy">Privacy Policy</a>.</p>}
         </form>
-        <button className="account-switch" onClick={switchMode}>{mode==='login'?<>New here? <strong>Create an account</strong></>:<>Already have an account? <strong>Log in</strong></>}</button>
+        <button className="account-switch" onClick={switchMode}>{mode==='login'?<>New here? <strong>Create an account</strong></>:mode==='recover'?<><strong>Back to login</strong></>:<>Already have an account? <strong>Log in</strong></>}</button>
         <small className="account-trust"><ShieldCheck size={14}/> Your passwords are never visible to B.E.I.P.I.</small>
       </>}
     </section>
