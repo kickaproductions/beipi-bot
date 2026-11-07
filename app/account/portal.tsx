@@ -15,6 +15,13 @@ const passwordRules=[
   {label:'One symbol',test:(value:string)=>/[^A-Za-z0-9]/.test(value)},
 ];
 
+const lockedAccountMessage='Your account has been locked for security. Please contact help@beipi.app for assistance.';
+
+function friendlyAuthError(value:unknown,fallback:string){
+  const message=value instanceof Error?value.message:fallback;
+  return /user.?is.?banned|banned|user_banned/i.test(message)?lockedAccountMessage:message;
+}
+
 export default function AccountPortal(){
   const [mode,setMode]=useState<Mode>('login');
   const [busy,setBusy]=useState(false);
@@ -27,6 +34,7 @@ export default function AccountPortal(){
   const [accountName,setAccountName]=useState('');
   const [configured,setConfigured]=useState(true);
   const [suspended,setSuspended]=useState(false);
+  const [locked,setLocked]=useState(false);
   const [next,setNext]=useState('/dashboard');
 
   useEffect(()=>{
@@ -34,6 +42,8 @@ export default function AccountPortal(){
     const sessionExpired=params.get('session')==='expired';
     if(params.get('mode')==='signup')setMode('signup');
     if(params.get('suspended')==='1')setSuspended(true);
+    if(params.get('locked')==='1')setLocked(true);
+    if(params.get('error')==='callback')setError('That sign-in could not be completed. Please try again.');
     if(params.get('password')==='updated')setMessage('Your password has been updated. You can log in with it now.');
     if(params.get('recovery')==='expired')setError('That password-reset link has expired or was already used. Request a new one below.');
     const requested=params.get('next');
@@ -97,7 +107,7 @@ export default function AccountPortal(){
         window.location.assign(next);
       }
     }catch(value){
-      setError(value instanceof Error?value.message:'B.E.I.P.I. could not sign you in.');
+      setError(friendlyAuthError(value,'B.E.I.P.I. could not sign you in.'));
     }finally{setBusy(false)}
   }
 
@@ -109,7 +119,7 @@ export default function AccountPortal(){
       const {error}=await supabase.auth.signInWithOAuth({provider,options:{redirectTo:callbackUrl()}});
       if(error)throw error;
     }catch(value){
-      setError(value instanceof Error?value.message:'That sign-in could not be started.');
+      setError(friendlyAuthError(value,'That sign-in could not be started.'));
       setBusy(false);
     }
   }
@@ -124,8 +134,8 @@ export default function AccountPortal(){
       if(error)throw error;
       window.location.assign(next);
     }catch(value){
-      const text=value instanceof Error?value.message:'Passkey sign-in could not be completed.';
-      setError(text.includes('cancel')||text.includes('not allowed')?'Passkey sign-in was cancelled. You can try again whenever you’re ready.':text);
+      const text=friendlyAuthError(value,'Passkey sign-in could not be completed.');
+      setError(text===lockedAccountMessage?text:text.includes('cancel')||text.includes('not allowed')?'Passkey sign-in was cancelled. You can try again whenever you’re ready.':text);
     }finally{setBusy(false)}
   }
 
@@ -153,6 +163,7 @@ export default function AccountPortal(){
     <section className="account-card">
       <div className="account-brand"><img src="/beipi-account-logo.png" alt="B.E.I.P.I. Bot mascot logo"/><div><strong>B.E.I.P.I.</strong><small>Your streaming companion</small></div></div>
       {!configured?<div className="account-state"><ShieldCheck size={31}/><h1>Accounts are nearly ready.</h1><p>Connect B.E.I.P.I.’s account database to finish this setup.</p></div>
+      :locked?<div className="account-state"><ShieldCheck size={31}/><h1>Account locked.</h1><p>Your account has been locked for security. Please contact <a href="mailto:help@beipi.app">help@beipi.app</a> for assistance.</p><button className="outline" disabled={busy} onClick={()=>void signOut()}><LogOut size={16}/> Sign out</button></div>
       :suspended?<div className="account-state"><ShieldCheck size={31}/><h1>Account suspended.</h1><p>Dashboard access is paused. Contact B.E.I.P.I. support if you believe this is a mistake.</p><button className="outline" disabled={busy} onClick={()=>void signOut()}><LogOut size={16}/> Sign out</button></div>
       :user?<div className="account-state account-signed-in"><h1>{accountName?`Welcome, ${accountName}.`:'Welcome aboard.'}</h1><p>You’re signed in as <strong>{user.email}</strong>.</p><a className="primary account-dashboard" href={next}>{next.startsWith('/crew-invite')?'Continue to invitation':'Open your dashboard'}</a><button className="outline account-sign-out" disabled={busy} onClick={()=>void signOut()}><LogOut size={16}/> Sign out</button></div>
       :<>

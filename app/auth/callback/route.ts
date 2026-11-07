@@ -6,6 +6,6 @@ export async function GET(request:Request){
   const code=url.searchParams.get('code');
   const requested=url.searchParams.get('next');
   const next=requested?.startsWith('/')&&!requested.startsWith('//')?requested:'/dashboard';
-  if(code){try{const supabase=await createClient();const {error}=await supabase.auth.exchangeCodeForSession(code);if(!error)return NextResponse.redirect(new URL(next,url.origin))}catch{}}
+  if(code){try{const supabase=await createClient();const {error}=await supabase.auth.exchangeCodeForSession(code);if(!error)return NextResponse.redirect(new URL(next,url.origin));if(/user.?is.?banned|banned|user_banned/i.test(error.message))return NextResponse.redirect(new URL('/account?locked=1',url.origin))}catch{}}
   return NextResponse.redirect(new URL('/account?error=callback',url.origin));
 }

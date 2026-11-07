@@ -26,10 +26,11 @@ export async function proxy(request:NextRequest){
         loginUrl.searchParams.set('next',`${request.nextUrl.pathname}${request.nextUrl.search}`);
         return NextResponse.redirect(loginUrl);
       }
-      const {data:profile}=await supabase.from('profiles').select('account_status,founding_tester,role').eq('id',user.id).maybeSingle();
+      const {data:profile}=await supabase.from('profiles').select('account_status,suspension_reason,founding_tester,role').eq('id',user.id).maybeSingle();
       if(profile?.account_status==='suspended'){
         if(request.nextUrl.pathname.startsWith('/api/'))return NextResponse.json({error:'This account is suspended. Contact B.E.I.P.I. support if you believe this is a mistake.'},{status:403});
-        return NextResponse.redirect(new URL('/account?suspended=1',request.url));
+        const emergencyLock=profile.suspension_reason?.startsWith('Emergency lock');
+        return NextResponse.redirect(new URL(emergencyLock?'/account?locked=1':'/account?suspended=1',request.url));
       }
       const isTester=Boolean(profile?.founding_tester)||profile?.role==='developer';
       const isProtectedApi=request.nextUrl.pathname.startsWith('/api/')&&!request.nextUrl.pathname.startsWith('/api/tester-access')&&!request.nextUrl.pathname.startsWith('/api/tester-nda');
