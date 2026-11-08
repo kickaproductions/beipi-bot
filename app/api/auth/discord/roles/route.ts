@@ -19,7 +19,9 @@ export async function GET(request:NextRequest){
   try{
     let guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'});
     if(guildResponse.status===401){const refreshed=await refreshDiscordSession(session);if(refreshed){session=refreshed;encrypted=encryptDiscordSession(refreshed);await savePlatformConnection({platform:'discord',externalUserId:refreshed.user.id,displayName:refreshed.user.displayName,username:refreshed.user.username,avatarUrl:refreshed.user.avatarUrl,encryptedSession:encrypted});guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'})}}
-    if(!guildResponse.ok)throw new Error('Discord account access expired. Reconnect Discord and try again.');
+    if(guildResponse.status===401)throw new Error('Discord account access expired. Reconnect Discord and try again.');
+    if(guildResponse.status===429)throw new Error('Discord is temporarily limiting requests. Wait a few seconds, then choose the server again.');
+    if(!guildResponse.ok)throw new Error('Discord could not check your server access right now.');
     const guilds=await guildResponse.json() as Guild[];
     const manageGuild=BigInt(32);
     if(!guilds.some(g=>g.id===guildId&&(g.owner||(BigInt(g.permissions)&manageGuild)===manageGuild)))return NextResponse.json({error:'You do not manage that Discord server.'},{status:403});

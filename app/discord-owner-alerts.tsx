@@ -16,12 +16,14 @@ export default function DiscordOwnerAlerts({guilds}:{guilds:Guild[]}){
   if(!id)return;
   setBusy(true);
   try{
-   const [channelResponse,roleResponse,settingsResponse]=await Promise.all([fetch('/api/auth/discord/channels?guildId='+encodeURIComponent(id),{cache:'no-store'}),fetch('/api/auth/discord/roles?purpose=mention&guildId='+encodeURIComponent(id),{cache:'no-store'}),fetch('/api/discord-live-settings?guildId='+encodeURIComponent(id),{cache:'no-store'})]);
+   const channelResponse=await fetch('/api/auth/discord/channels?guildId='+encodeURIComponent(id),{cache:'no-store'});
    const channelData=await channelResponse.json() as {channels?:Channel[];error?:string};
-   const roleData=await roleResponse.json() as {roles?:Role[];error?:string};
-   const settingsData=await settingsResponse.json() as {settings?:Settings|null;error?:string};
    if(!channelResponse.ok)throw Error(channelData.error||'B.E.I.P.I. could not load that server’s channels.');
+   const roleResponse=await fetch('/api/auth/discord/roles?purpose=mention&guildId='+encodeURIComponent(id),{cache:'no-store'});
+   const roleData=await roleResponse.json() as {roles?:Role[];error?:string};
    if(!roleResponse.ok)throw Error(roleData.error||'B.E.I.P.I. could not load that server’s roles.');
+   const settingsResponse=await fetch('/api/discord-live-settings?guildId='+encodeURIComponent(id),{cache:'no-store'});
+   const settingsData=await settingsResponse.json() as {settings?:Settings|null;error?:string};
    if(!settingsResponse.ok)throw Error(settingsData.error||'B.E.I.P.I. could not load the live settings.');
    const savedRoleId=settingsData.settings?.ownerRoleId||'';
    setChannels(channelData.channels||[]);setRoles(roleData.roles||[]);setSettings(settingsData.settings||null);setChannelId(settingsData.settings?.ownerAlertChannelId||settingsData.settings?.alertChannelId||'');setEveryone(settingsData.settings?.ownerEveryoneEnabled!==false);setRoleId(savedRoleId);setRoleEnabled(Boolean(savedRoleId));setTemplate(settingsData.settings?.ownerMessageTemplate||defaultTemplate);
