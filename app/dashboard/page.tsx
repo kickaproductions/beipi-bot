@@ -2,7 +2,6 @@ import Dashboard from '../dashboard';
 import {redirect} from 'next/navigation';
 import {createClient} from '@/lib/supabase/server';
 import {NDA_VERSION} from '../nda-agreement';
-import {BETA_RULES_VERSION} from '../beta-rules';
 
 export const dynamic='force-dynamic';
 
@@ -15,6 +14,6 @@ export default async function DashboardPage(){
   const approved=Boolean(profile?.founding_tester)||profile?.role==='developer';
   const trusted=Boolean(user.app_metadata?.trusted_access);
   const agreement=approved&&!trusted?await supabase.from('beta_nda_acceptances').select('id').eq('user_id',user.id).eq('agreement_version',NDA_VERSION).maybeSingle():{data:null,error:null};
-  const agreementAccepted=trusted?user.app_metadata?.beta_rules_version===BETA_RULES_VERSION:agreement.error?profile?.role==='developer':Boolean(agreement.data);
+  const agreementAccepted=trusted?true:agreement.error?profile?.role==='developer':Boolean(agreement.data);
   return <Dashboard userName={userName} initialUsername={profile?.username||''} isDeveloper={profile?.role==='developer'} isTester={approved&&agreementAccepted}/>;
 }
