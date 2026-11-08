@@ -1,9 +1,9 @@
 import {createClient} from '@/lib/supabase/server';
 
-type ItemRow={id:string;kind:string;title:string;note:string;due:string|null;done:boolean;priority:'low'|'medium'|'high';checklist_phase:'pre'|'post';sort_order:number;created_by_pip:boolean;series_id:string|null;recurrence:'weekly'|'fortnightly'|'monthly'|null;recurrence_ongoing:boolean;created_at:string};
+type ItemRow={id:string;kind:string;title:string;note:string;due:string|null;done:boolean;priority:'low'|'medium'|'high';checklist_phase:'pre'|'post';sort_order:number;created_by_pip:boolean;series_id:string|null;recurrence:'weekly'|'fortnightly'|'monthly'|null;recurrence_ongoing:boolean;pinned:boolean;shared_added_by_name:string|null;created_at:string};
 const json=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
-const fields='id,kind,title,note,due,done,priority,checklist_phase,sort_order,created_by_pip,series_id,recurrence,recurrence_ongoing,created_at';
-const present=(item:ItemRow)=>({id:item.id,kind:item.kind,title:item.title,note:item.note,due:item.due,done:item.done,priority:item.priority||'medium',checklistPhase:item.checklist_phase||'pre',sortOrder:Number(item.sort_order)||0,createdByPip:Boolean(item.created_by_pip),seriesId:item.series_id||'',recurrence:item.recurrence||'',recurrenceOngoing:Boolean(item.recurrence_ongoing),createdAt:item.created_at});
+const fields='id,kind,title,note,due,done,priority,checklist_phase,sort_order,created_by_pip,series_id,recurrence,recurrence_ongoing,pinned,shared_added_by_name,created_at';
+const present=(item:ItemRow)=>({id:item.id,kind:item.kind,title:item.title,note:item.note,due:item.due,done:item.done,priority:item.priority||'medium',checklistPhase:item.checklist_phase||'pre',sortOrder:Number(item.sort_order)||0,createdByPip:Boolean(item.created_by_pip),seriesId:item.series_id||'',recurrence:item.recurrence||'',recurrenceOngoing:Boolean(item.recurrence_ongoing),pinned:Boolean(item.pinned),sharedAddedByName:item.shared_added_by_name||'',createdAt:item.created_at});
 
 function nextRecurringDate(value:string,recurrence:ItemRow['recurrence']){const date=new Date(value);if(recurrence==='weekly')date.setDate(date.getDate()+7);else if(recurrence==='fortnightly')date.setDate(date.getDate()+14);else if(recurrence==='monthly')date.setMonth(date.getMonth()+1);return date}
 
@@ -48,12 +48,12 @@ export async function POST(request:Request){
   try{
     const {supabase,user,error:authError}=await signedIn();
     if(authError||!user)return json({error:'Please sign in before saving.'},401);
-    const body=await request.json() as {kind?:string;title?:string;note?:string;due?:string|null;priority?:string;checklistPhase?:string;sortOrder?:number;createdByPip?:boolean;seriesId?:string;recurrence?:string;recurrenceOngoing?:boolean};
+    const body=await request.json() as {kind?:string;title?:string;note?:string;due?:string|null;priority?:string;checklistPhase?:string;sortOrder?:number;createdByPip?:boolean;seriesId?:string;recurrence?:string;recurrenceOngoing?:boolean;pinned?:boolean};
     const title=String(body.title??'').trim(),kind=String(body.kind??'');
     if(!title||!['reminder','checklist','idea','connection','crew-task','crew-stream','crew-milestone'].includes(kind))return json({error:'Check the title and try again.'},400);
     const priority=['low','medium','high'].includes(String(body.priority))?String(body.priority):'medium';
     const checklistPhase=body.checklistPhase==='post'?'post':'pre',recurrence=['weekly','fortnightly','monthly'].includes(String(body.recurrence))?String(body.recurrence):null;
-    const {data,error}=await supabase.from('companion_items').insert({user_id:user.id,kind,title:title.slice(0,200),note:String(body.note??'').slice(0,2000),due:body.due||null,priority,checklist_phase:checklistPhase,sort_order:Number.isFinite(body.sortOrder)?body.sortOrder:0,created_by_pip:Boolean(body.createdByPip),series_id:body.seriesId||null,recurrence,recurrence_ongoing:Boolean(body.recurrenceOngoing&&recurrence)}).select(fields).single();
+    const {data,error}=await supabase.from('companion_items').insert({user_id:user.id,kind,title:title.slice(0,200),note:String(body.note??'').slice(0,2000),due:body.due||null,priority,checklist_phase:checklistPhase,sort_order:Number.isFinite(body.sortOrder)?body.sortOrder:0,created_by_pip:Boolean(body.createdByPip),series_id:body.seriesId||null,recurrence,recurrence_ongoing:Boolean(body.recurrenceOngoing&&recurrence),pinned:Boolean(body.pinned)}).select(fields).single();
     if(error)throw error;
     return json(present(data as ItemRow),201);
   }catch{return json({error:'B.E.I.P.I. could not save that item.'},500)}
@@ -63,7 +63,7 @@ export async function PATCH(request:Request){
   try{
     const {supabase,user,error:authError}=await signedIn();
     if(authError||!user)return json({error:'Please sign in before changing saved items.'},401);
-    const body=await request.json() as {id?:string;title?:string;note?:string;done?:boolean;due?:string|null;priority?:string;checklistPhase?:string;sortOrder?:number;kind?:string;positions?:Array<{id:string;sortOrder:number}>};
+    const body=await request.json() as {id?:string;title?:string;note?:string;done?:boolean;due?:string|null;priority?:string;checklistPhase?:string;sortOrder?:number;kind?:string;pinned?:boolean;positions?:Array<{id:string;sortOrder:number}>};
     if(Array.isArray(body.positions)){
       const reorderKind=body.kind==='reminder'?'reminder':'checklist';
       for(const position of body.positions){if(!position.id||!Number.isFinite(position.sortOrder))continue;const {error}=await supabase.from('companion_items').update({sort_order:position.sortOrder,updated_at:new Date().toISOString()}).eq('id',position.id).eq('user_id',user.id).eq('kind',reorderKind);if(error)throw error}
@@ -82,6 +82,7 @@ export async function PATCH(request:Request){
     if(typeof body.priority==='string'&&['low','medium','high'].includes(body.priority))changes.priority=body.priority;
     if(body.checklistPhase==='pre'||body.checklistPhase==='post')changes.checklist_phase=body.checklistPhase;
     if(Number.isFinite(body.sortOrder))changes.sort_order=body.sortOrder;
+    if(typeof body.pinned==='boolean')changes.pinned=body.pinned;
     const {data,error}=await supabase.from('companion_items').update(changes).eq('id',body.id).eq('user_id',user.id).select(fields).maybeSingle();
     if(error)throw error;
     if(!data)return json({error:'Item not found.'},404);

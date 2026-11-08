@@ -13,6 +13,10 @@ async function save(request:Request){const {supabase,user}=await account();if(!u
 export async function POST(request:Request){try{return await save(request)}catch{return json({error:'B.E.I.P.I. could not save that shared item.'},500)}}
 export async function PATCH(request:Request){try{return await save(request)}catch{return json({error:'B.E.I.P.I. could not update that shared item.'},500)}}
 
+export async function PUT(request:Request){
+ try{const {supabase,user}=await account();if(!user)return json({error:'Sign in to approve a shared item.'},401);const body=await request.json() as {broadcasterId?:string;id?:string};if(!body.broadcasterId||!body.id)return json({error:'Shared item not found.'},404);const {data,error}=await supabase.rpc('approve_shared_crew_item',{target_broadcaster_id:body.broadcasterId,item_id:body.id});if(error)throw error;if(!data)return json({error:'Only the streamer can approve this item.'},403);return json({ok:true})}catch{return json({error:'Pip could not approve that shared item.'},500)}
+}
+
 export async function DELETE(request:Request){
  try{const {supabase,user}=await account();if(!user)return json({error:'Sign in to change a shared space.'},401);const url=new URL(request.url),broadcasterId=url.searchParams.get('broadcasterId'),id=url.searchParams.get('id');if(!broadcasterId||!id)return json({error:'Shared item not found.'},404);const {data,error}=await supabase.rpc('delete_shared_crew_item',{target_broadcaster_id:broadcasterId,item_id:id});if(error)throw error;if(!data)return json({error:'Shared item not found.'},404);return json({ok:true})}catch{return json({error:'B.E.I.P.I. could not delete that shared item.'},500)}
 }
