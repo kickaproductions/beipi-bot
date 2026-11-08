@@ -99,6 +99,7 @@ async function handleStreamConfirmation(interaction){
  const content=status==='confirmed'
   ?renderConfirmationMessage(config.message_template,stream,details,config)
   :renderConfirmationMessage(config.cancel_message_template||defaultCancellationMessage,stream,details,config,nextStream);
+ if(config.post_to_discord===false){await supabase.from('stream_confirmation_runs').update({status,responded_at:respondedAt,updated_at:new Date().toISOString()}).eq('id',run.id);const resultText=status==='confirmed'?'Perfect — you’re confirmed. I’ll keep this one private.':'Got it — I’ve marked this stream as cancelled and won’t post it in the server.';await interaction.editReply({content:`${interaction.message.content}\n\n**${resultText}**`,components:[]}).catch(()=>{});return}
  try{
   const message=await client.rest.post(Routes.channelMessages(config.channel_id),{body:{content,allowed_mentions:{parse:[],roles:config.role_id?[config.role_id]:[]}}});
   if(!message?.id)throw new Error('Discord did not return a message ID.');
