@@ -46,7 +46,8 @@ async function processStreamConfirmations(){
  try{
   const {data:confirmationSettings,error:settingsError}=await supabase.from('stream_confirmation_settings').select('*').eq('enabled',true);
   if(settingsError){if(settingsError.code!=='42P01')console.error('[stream-confirmations]',settingsError.message);return}
-  const activeSettings=(confirmationSettings||[]).filter(row=>!row.holiday_mode);if(!activeSettings.length)return;
+  const today=new Date().toISOString().slice(0,10);
+  const activeSettings=(confirmationSettings||[]).filter(row=>!row.holiday_mode||!row.holiday_start||!row.holiday_end||today<row.holiday_start||today>row.holiday_end);if(!activeSettings.length)return;
   const userIds=activeSettings.map(row=>row.user_id),now=new Date(),cutoff=new Date(now.getTime()+60*60*1000);
   const [{data:connections,error:connectionsError},{data:streams,error:streamsError}]=await Promise.all([
    supabase.from('platform_connections').select('user_id,external_user_id,display_name').eq('platform','discord').in('user_id',userIds),
