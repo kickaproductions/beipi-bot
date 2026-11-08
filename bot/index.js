@@ -17,7 +17,7 @@ const ownerDefault='# {streamer} is now live!\n{streamer} is streaming {game} on
 const creatorDefault='# {streamer} is now live!\nStreaming {game} on {platform}.\nCome and say hello\n{url}';
 
 const discordTimestamp=value=>Math.floor(new Date(value).getTime()/1000);
-const streamDetails=note=>{try{const value=JSON.parse(note);if(value?.v===1)return {platform:String(value.platform||'stream'),game:String(value.game||''),username:String(value.username||'')}}catch{}return {platform:note||'stream',game:'',username:''}};
+const streamDetails=note=>{try{const value=JSON.parse(note);if(value?.v===1)return {platform:String(value.platform||'stream'),game:String(value.game||''),username:String(value.username||''),discordReminder:value.discordReminder!==false}}catch{}return {platform:note||'stream',game:'',username:'',discordReminder:true}};
 const streamDestination=details=>details.username?`${details.platform} (@${details.username.replace(/^@/,'')})`:details.platform;
 const defaultConfirmationMessage='# Stream in 1 hour!\n\n{username} is streaming {game}, see you soon!\n\n{embed}\n\n@{role}';
 const defaultCancellationMessage='# Stream Cancelled\n\n{username} has cancelled their stream.\n\nTheir next stream is on: {date and time}';
@@ -58,6 +58,7 @@ async function processStreamConfirmations(){
   const sent=new Set((existing||[]).map(row=>row.stream_id)),connectionByUser=new Map((connections||[]).map(row=>[row.user_id,row]));
   for(const stream of streams){
    if(sent.has(stream.id))continue;
+   if(streamDetails(stream.note).discordReminder===false)continue;
    const config=activeSettings.find(row=>row.user_id===stream.user_id),connection=connectionByUser.get(stream.user_id);
    if(!config||!connection?.external_user_id)continue;
    const guild=client.guilds.cache.get(config.guild_id);
@@ -174,8 +175,8 @@ async function goLive(member,presence,config){
  try{
   await member.roles.add(role,'B.E.I.P.I. detected Discord Streaming activity');
   const isOwner=member.id===member.guild.ownerId;const channelId=isOwner&&config.owner_alert_channel_id?config.owner_alert_channel_id:config.alert_channel_id;const channel=member.guild.channels.cache.get(channelId);let message=null;const activity=streamActivity(presence);
-  const template=isOwner?(config.owner_message_template||ownerDefault):(config.creator_message_template||creatorDefault);const rendered=renderTemplate(template,member,activity);const content=isOwner&&config.owner_everyone_enabled?`@everyone\n${rendered}`:rendered;
-  if(channel?.isTextBased())message=await channel.send({content,allowedMentions:{parse:isOwner&&config.owner_everyone_enabled?['everyone']:[]}});
+  const template=isOwner?(config.owner_message_template||ownerDefault):(config.creator_message_template||creatorDefault);const rendered=renderTemplate(template,member,activity);const ownerMentions=isOwner?[config.owner_everyone_enabled?'@everyone':'',config.owner_role_id?`<@&${config.owner_role_id}>`:''].filter(Boolean):[];const content=ownerMentions.length?`${ownerMentions.join(' ')}\n${rendered}`:rendered;
+  if(channel?.isTextBased())message=await channel.send({content,allowedMentions:isOwner?{parse:config.owner_everyone_enabled?['everyone']:[],roles:config.owner_role_id?[config.owner_role_id]:[]}:{parse:[]}});
   else await logActivity(member.guild.id,'alert_error','warning','Live alert channel is unavailable','The configured alert channel could not be found or is not a text channel.',{channelId});
   const {error}=await supabase.from('discord_live_events').upsert({guild_id:member.guild.id,member_id:member.id,message_id:message?.id||null,channel_id:channel?.id||config.alert_channel_id,started_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:'guild_id,member_id'});
   if(error)console.error('[live-event]',error.message);

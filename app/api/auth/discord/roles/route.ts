@@ -10,6 +10,7 @@ type GuildMember={roles:string[]};
 
 export async function GET(request:NextRequest){
   const guildId=request.nextUrl.searchParams.get('guildId');
+  const mentionOnly=request.nextUrl.searchParams.get('purpose')==='mention';
   if(!guildId)return NextResponse.json({error:'Choose a Discord server first.'},{status:400});
   const cookieSession=request.cookies.get(DISCORD_SESSION_COOKIE)?.value;let storedSession:string|undefined;
   try{storedSession=(await getPlatformConnection('discord'))?.encrypted_session}catch{}
@@ -32,6 +33,10 @@ export async function GET(request:NextRequest){
     if(rolesResponse.status===403||rolesResponse.status===404)return NextResponse.json({error:'Add B.E.I.P.I. to this server and give her Manage Roles permission.'},{status:403});
     if(!rolesResponse.ok||!botResponse.ok)throw new Error('Discord could not load the server roles.');
     const roles=await rolesResponse.json() as Role[];const bot=await botResponse.json() as BotUser;
+    if(mentionOnly){
+      const mentionRoles=roles.filter(role=>role.id!==guildId&&!role.managed).sort((a,b)=>b.position-a.position).map(role=>({id:role.id,name:role.name,color:role.color,position:role.position}));
+      const response=NextResponse.json({roles:mentionRoles},{headers:{'Cache-Control':'no-store'}});if(encrypted)response.cookies.set(DISCORD_SESSION_COOKIE,encrypted,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});return response;
+    }
     const memberResponse=await fetch(`https://discord.com/api/guilds/${guildId}/members/${bot.id}`,{headers,cache:'no-store'});
     if(!memberResponse.ok)throw new Error('B.E.I.P.I. could not check her role position.');
     const member=await memberResponse.json() as GuildMember;
