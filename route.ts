@@ -1,12 +1,40 @@
-import {z} from 'zod';
 import {createClient} from '@/lib/supabase/server';
+import {createAdminClient} from '@/lib/supabase/admin';
+import {z} from 'zod';
 
-const ownerDefault='# {streamer} is now live!\n{streamer} is streaming {game} on {platform}.\nThey brought their trusty {random_companion}!\nCome and say hello\n{url}';
-const creatorDefault='# {streamer} is now live!\nStreaming {game} on {platform}.\nCome and say hello\n{url}';
-const schema=z.object({guildId:z.string().min(1).max(30),guildName:z.string().trim().min(1).max(100),creatorRoleId:z.string().min(1).max(30),creatorRoleName:z.string().trim().min(1).max(100),liveRoleId:z.string().min(1).max(30),liveRoleName:z.string().trim().min(1).max(100),alertChannelId:z.string().min(1).max(30),alertChannelName:z.string().trim().min(1).max(100),ownerAlertChannelId:z.string().max(30).default(''),ownerAlertChannelName:z.string().trim().max(100).default(''),ownerEveryoneEnabled:z.boolean().default(true),ownerMessageTemplate:z.string().trim().min(1).max(1800).default(ownerDefault),creatorMessageTemplate:z.string().trim().min(1).max(1800).default(creatorDefault),discordPresenceEnabled:z.boolean().default(true),platformConfirmationEnabled:z.boolean().default(true),deleteExpiredAlert:z.boolean().default(true)}).refine(value=>value.creatorRoleId!==value.liveRoleId,{message:'Choose two different roles.',path:['liveRoleId']});
-const json=(data:unknown,status=200)=>Response.json(data,{status,headers:{'Cache-Control':'no-store'}});
-async function account(){const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();return {supabase,user}}
-const output=(row:Record<string,unknown>)=>({guildId:row.guild_id,guildName:row.guild_name,creatorRoleId:row.creator_role_id,creatorRoleName:row.creator_role_name,liveRoleId:row.live_role_id,liveRoleName:row.live_role_name,alertChannelId:row.alert_channel_id,alertChannelName:row.alert_channel_name,ownerAlertChannelId:row.owner_alert_channel_id||'',ownerAlertChannelName:row.owner_alert_channel_name||'',ownerEveryoneEnabled:row.owner_everyone_enabled!==false,ownerMessageTemplate:row.owner_message_template||ownerDefault,creatorMessageTemplate:row.creator_message_template||creatorDefault,discordPresenceEnabled:row.discord_presence_enabled,platformConfirmationEnabled:row.platform_confirmation_enabled,deleteExpiredAlert:row.delete_expired_alert,updatedAt:row.updated_at});
+const schema=z.object({id:z.string().uuid(),action:z.enum(['grant','revoke']),accessType:z.enum(['beta','trusted']).optional()});
 
-export async function GET(request:Request){const {supabase,user}=await account();if(!user)return json({error:'Sign in to view live-role settings.'},401);const guildId=new URL(request.url).searchParams.get('guildId');if(!guildId)return json({settings:null});const {data,error}=await supabase.from('discord_live_settings').select('*').eq('user_id',user.id).eq('guild_id',guildId).maybeSingle();if(error)return json({error:'Could not load live-role settings.'},500);return json({settings:data?output(data):null})}
-export async function PUT(request:Request){const {supabase,user}=await account();if(!user)return json({error:'Sign in to save live-role settings.'},401);const parsed=schema.safeParse(await request.json());if(!parsed.success)return json({error:parsed.error.issues[0]?.message||'Check your live-role settings.'},400);const value=parsed.data;const {data,error}=await supabase.from('discord_live_settings').upsert({user_id:user.id,guild_id:value.guildId,guild_name:value.guildName,creator_role_id:value.creatorRoleId,creator_role_name:value.creatorRoleName,live_role_id:value.liveRoleId,live_role_name:value.liveRoleName,alert_channel_id:value.alertChannelId,alert_channel_name:value.alertChannelName,owner_alert_channel_id:value.ownerAlertChannelId||value.alertChannelId,owner_alert_channel_name:value.ownerAlertChannelName||value.alertChannelName,owner_everyone_enabled:value.ownerEveryoneEnabled,owner_message_template:value.ownerMessageTemplate,creator_message_template:value.creatorMessageTemplate,discord_presence_enabled:value.discordPresenceEnabled,platform_confirmation_enabled:value.platformConfirmationEnabled,delete_expired_alert:value.deleteExpiredAlert,updated_at:new Date().toISOString()},{onConflict:'user_id,guild_id'}).select('*').single();if(error)return json({error:'Could not save live-role settings.'},500);return json({settings:output(data)})}
+export async function PATCH(request:Request){
+  const supabase=await createClient();
+  const {data:{user}}=await supabase.auth.getUser();
+  if(!user)return Response.json({error:'Sign in to manage accounts.'},{status:401});
+  const {data:developer}=await supabase.from('profiles').select('role').eq('id',user.id).maybeSingle();
+  if(developer?.role!=='developer')return Response.json({error:'Developer access is required.'},{status:403});
+  const {data:assurance}=await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if(assurance?.currentLevel!=='aal2')return Response.json({error:'Two-factor authentication is required.'},{status:403});
+
+  const parsed=schema.safeParse(await request.json());
+  if(!parsed.success)return Response.json({error:'Choose a valid access action.'},{status:400});
+  if(parsed.data.id===user.id)return Response.json({error:'Your own developer access does not need a trusted-access exemption.'},{status:400});
+
+  const admin=createAdminClient();
+  const [{data:target,error:targetError},{data:authTarget,error:authTargetError}]=await Promise.all([admin.from('profiles').select('id,role,founding_tester,lifetime_free,account_status').eq('id',parsed.data.id).maybeSingle(),admin.auth.admin.getUserById(parsed.data.id)]);
+  if(targetError||!target||authTargetError||!authTarget.user)return Response.json({error:'That account could not be found.'},{status:404});
+  if(target.role==='developer')return Response.json({error:'Developer accounts already have their own protected access.'},{status:400});
+  if(target.account_status!=='active')return Response.json({error:'Restore or unlock this account before granting access.'},{status:400});
+
+  const granting=parsed.data.action==='grant';
+  const accessType=parsed.data.accessType||'trusted';
+  const trusted=granting&&accessType==='trusted';
+  const previousMetadata=authTarget.user.app_metadata||{};
+  const {error:authError}=await admin.auth.admin.updateUserById(parsed.data.id,{app_metadata:{...previousMetadata,trusted_access:trusted,beta_rules_version:null,beta_rules_accepted_at:null}});
+  if(authError)return Response.json({error:'Trusted access could not be updated.'},{status:500});
+  const {data:profile,error}=await admin.from('profiles').update({founding_tester:granting,updated_at:new Date().toISOString()}).eq('id',parsed.data.id).select('id,founding_tester,lifetime_free').single();
+  if(error||!profile){await admin.auth.admin.updateUserById(parsed.data.id,{app_metadata:previousMetadata});return Response.json({error:'Trusted access could not be updated.'},{status:500});}
+
+  const action=!granting?'trusted_access_revoked':trusted?'trusted_access_granted':'beta_access_granted';
+  const reason=!granting?'B.E.I.P.I. access revoked':trusted?'Trusted B.E.I.P.I. access granted without an agreement requirement':'Beta tester access granted; NDA acceptance required';
+  await admin.from('account_admin_audit').insert({target_user_id:parsed.data.id,actor_user_id:user.id,action,reason,previous_values:{foundingTester:target.founding_tester,ndaExempt:Boolean(previousMetadata.trusted_access)},new_values:{foundingTester:profile.founding_tester,ndaExempt:trusted}});
+  return Response.json({ok:true,foundingTester:Boolean(profile.founding_tester),lifetimeFree:Boolean(profile.lifetime_free),ndaExempt:trusted});
+}
+
