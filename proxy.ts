@@ -1,6 +1,7 @@
 import {createServerClient} from '@supabase/ssr';
 import {NextResponse,type NextRequest} from 'next/server';
 import {NDA_VERSION} from './app/nda-agreement';
+import {BETA_RULES_VERSION} from './app/beta-rules';
 
 const MAX_SESSION_AGE_MS=7*24*60*60*1000;
 
@@ -33,11 +34,15 @@ export async function proxy(request:NextRequest){
         return NextResponse.redirect(new URL(emergencyLock?'/account?locked=1':'/account?suspended=1',request.url));
       }
       const isTester=Boolean(profile?.founding_tester)||profile?.role==='developer';
-      const isProtectedApi=request.nextUrl.pathname.startsWith('/api/')&&!request.nextUrl.pathname.startsWith('/api/tester-access')&&!request.nextUrl.pathname.startsWith('/api/tester-nda');
+      const isProtectedApi=request.nextUrl.pathname.startsWith('/api/')&&!request.nextUrl.pathname.startsWith('/api/tester-access')&&!request.nextUrl.pathname.startsWith('/api/tester-nda')&&!request.nextUrl.pathname.startsWith('/api/tester-rules');
       if(!isTester&&isProtectedApi)return NextResponse.json({error:'Private beta access is required for this feature.'},{status:403});
       if(isTester&&isProtectedApi){
-        const {data:acceptance,error:acceptanceError}=await supabase.from('beta_nda_acceptances').select('id').eq('user_id',user.id).eq('agreement_version',NDA_VERSION).maybeSingle();
-        if(!acceptanceError&&!acceptance)return NextResponse.json({error:'Please accept the beta NDA in the Tester Portal before using this feature.'},{status:403});
+        if(user.app_metadata?.trusted_access){
+          if(user.app_metadata?.beta_rules_version!==BETA_RULES_VERSION)return NextResponse.json({error:'Please accept the Beta Testing Rules in the Tester Portal before using this feature.'},{status:403});
+        }else{
+          const {data:acceptance,error:acceptanceError}=await supabase.from('beta_nda_acceptances').select('id').eq('user_id',user.id).eq('agreement_version',NDA_VERSION).maybeSingle();
+          if(!acceptanceError&&!acceptance)return NextResponse.json({error:'Please accept the beta NDA in the Tester Portal before using this feature.'},{status:403});
+        }
       }
     }
   }catch{
