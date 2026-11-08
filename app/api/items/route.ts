@@ -63,9 +63,10 @@ export async function PATCH(request:Request){
   try{
     const {supabase,user,error:authError}=await signedIn();
     if(authError||!user)return json({error:'Please sign in before changing saved items.'},401);
-    const body=await request.json() as {id?:string;title?:string;note?:string;done?:boolean;due?:string|null;priority?:string;checklistPhase?:string;sortOrder?:number;positions?:Array<{id:string;sortOrder:number}>};
+    const body=await request.json() as {id?:string;title?:string;note?:string;done?:boolean;due?:string|null;priority?:string;checklistPhase?:string;sortOrder?:number;kind?:string;positions?:Array<{id:string;sortOrder:number}>};
     if(Array.isArray(body.positions)){
-      for(const position of body.positions){if(!position.id||!Number.isFinite(position.sortOrder))continue;const {error}=await supabase.from('companion_items').update({sort_order:position.sortOrder,updated_at:new Date().toISOString()}).eq('id',position.id).eq('user_id',user.id).eq('kind','checklist');if(error)throw error}
+      const reorderKind=body.kind==='reminder'?'reminder':'checklist';
+      for(const position of body.positions){if(!position.id||!Number.isFinite(position.sortOrder))continue;const {error}=await supabase.from('companion_items').update({sort_order:position.sortOrder,updated_at:new Date().toISOString()}).eq('id',position.id).eq('user_id',user.id).eq('kind',reorderKind);if(error)throw error}
       return json({ok:true});
     }
     if(!body.id)return json({error:'Item not found.'},404);
