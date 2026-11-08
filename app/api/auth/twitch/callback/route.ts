@@ -12,7 +12,7 @@ export async function GET(request:NextRequest){
   const code=request.nextUrl.searchParams.get('code');
   const state=request.nextUrl.searchParams.get('state');
   const expected=request.cookies.get(TWITCH_STATE_COOKIE)?.value;
-  if(request.nextUrl.searchParams.get('error')){home.searchParams.set('twitch','denied');return NextResponse.redirect(home)}
+  if(request.nextUrl.searchParams.get('error')){home.searchParams.set('twitch','denied');home.searchParams.set('twitch_error',request.nextUrl.searchParams.get('error_description')||request.nextUrl.searchParams.get('error')||'Twitch did not approve the connection.');return NextResponse.redirect(home)}
   if(!code||!state||!expected||state!==expected){home.searchParams.set('twitch','invalid-state');return NextResponse.redirect(home)}
   try{
     const {clientId,clientSecret,redirectUri}=twitchConfig();
