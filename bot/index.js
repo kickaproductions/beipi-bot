@@ -182,8 +182,8 @@ const matchingCommunityRules=(member,rules=[])=>rules.filter(rule=>rule.discord_
 async function postLiveTarget(member,activity,target,existingKeys){
  if(existingKeys.has(target.sourceKey))return false;
  if(target.liveRoleId){const role=member.guild.roles.cache.get(target.liveRoleId);if(!role?.editable){console.warn(`[roles] Cannot manage ${target.liveRoleName||target.liveRoleId} in ${member.guild.name}.`);await logActivity(member.guild.id,'role_error','warning','Could not add the live role',`B.E.I.P.I. cannot manage ${target.liveRoleName||'the configured live role'}.`,{roleId:target.liveRoleId})}else if(!member.roles.cache.has(role.id))await member.roles.add(role,'B.E.I.P.I. detected Discord Streaming activity')}
- const channel=member.guild.channels.cache.get(target.channelId);let message=null;const rendered=renderTemplate(target.template,member,activity);const mentions=[target.everyone?'@everyone':'',target.roleId?`<@&${target.roleId}>`:''].filter(Boolean);const content=mentions.length?`${mentions.join(' ')}\n${rendered}`:rendered;
- if(channel?.isTextBased())message=await channel.send({content,allowedMentions:{parse:target.everyone?['everyone']:[],roles:target.roleId?[target.roleId]:[]}});
+ const channel=member.guild.channels.cache.get(target.channelId);let message=null;const rendered=renderTemplate(target.template,member,activity);const roleIds=[...new Set((target.roleIds||[]).filter(Boolean))].slice(0,20);const mentions=[target.everyone?'@everyone':'',...roleIds.map(id=>`<@&${id}>`)].filter(Boolean);const content=mentions.length?`${mentions.join(' ')}\n${rendered}`:rendered;
+ if(channel?.isTextBased())message=await channel.send({content,allowedMentions:{parse:target.everyone?['everyone']:[],roles:roleIds}});
  else await logActivity(member.guild.id,'alert_error','warning','Live alert channel is unavailable','The configured alert channel could not be found or is not a text channel.',{channelId:target.channelId});
  const {error}=await supabase.from('discord_live_events').upsert({guild_id:member.guild.id,member_id:member.id,source_key:target.sourceKey,message_id:message?.id||null,channel_id:channel?.id||target.channelId,started_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:'guild_id,member_id,source_key'});
  if(error)console.error('[live-event]',error.message);else existingKeys.add(target.sourceKey);
@@ -195,8 +195,8 @@ async function goLive(member,presence,rules=[],personal){
  try{
   const {data:existing,error:existingError}=await supabase.from('discord_live_events').select('source_key').eq('guild_id',member.guild.id).eq('member_id',member.id);if(existingError)throw existingError;
   const existingKeys=new Set((existing||[]).map(row=>row.source_key)),activity=streamActivity(presence),targets=[];
-  for(const rule of community)targets.push({sourceKey:`community:${rule.id}`,channelId:rule.alert_channel_id,template:rule.creator_message_template||creatorDefault,liveRoleId:rule.live_role_id,liveRoleName:rule.live_role_name});
-  if(personalEligible)targets.push({sourceKey:`personal:${personal.id}`,channelId:personal.alert_channel_id,template:personal.message_template||ownerDefault,everyone:personal.everyone_enabled,roleId:personal.role_id});
+  for(const rule of community)targets.push({sourceKey:`community:${rule.id}`,channelId:rule.alert_channel_id,template:rule.creator_message_template||creatorDefault,liveRoleId:rule.live_role_id,liveRoleName:rule.live_role_name,roleIds:rule.mention_role_ids||[]});
+  if(personalEligible)targets.push({sourceKey:`personal:${personal.id}`,channelId:personal.alert_channel_id,template:personal.message_template||ownerDefault,everyone:personal.everyone_enabled,roleIds:personal.mention_role_ids?.length?personal.mention_role_ids:(personal.role_id?[personal.role_id]:[])});
   let sent=0;for(const target of targets)if(await postLiveTarget(member,activity,target,existingKeys))sent+=1;
   if(sent)await logActivity(member.guild.id,'live_started','info','Streamer detected live',`${member.displayName} started streaming on ${activity?.name||'a connected platform'}.`,{memberId:member.id,notificationsSent:sent});
   console.log(`[live] ${member.user.tag} in ${member.guild.name}: ${sent} notification(s)`);
