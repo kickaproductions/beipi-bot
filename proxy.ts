@@ -11,6 +11,13 @@ function sessionIsOlderThanOneWeek(lastSignInAt?:string){
 }
 
 export async function proxy(request:NextRequest){
+  const appUrl=process.env.NEXT_PUBLIC_APP_URL;
+  if(appUrl&&process.env.VERCEL_ENV==='production'){
+    try{
+      const canonical=new URL(appUrl);
+      if(request.nextUrl.host!==canonical.host){const destination=new URL(`${request.nextUrl.pathname}${request.nextUrl.search}`,canonical);return NextResponse.redirect(destination,308)}
+    }catch{}
+  }
   let response=NextResponse.next({request});
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
