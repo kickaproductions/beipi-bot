@@ -19,7 +19,7 @@ const creatorDefault='# {streamer} is now live!\nStreaming {game} on {platform}.
 const discordTimestamp=value=>Math.floor(new Date(value).getTime()/1000);
 const streamDetails=note=>{try{const value=JSON.parse(note);if(value?.v===1)return {platform:String(value.platform||'stream'),game:String(value.game||''),username:String(value.username||''),discordReminder:value.discordReminder!==false}}catch{}return {platform:note||'stream',game:'',username:'',discordReminder:true}};
 const streamDestination=details=>details.username?`${details.platform} (@${details.username.replace(/^@/,'')})`:details.platform;
-const defaultConfirmationMessage='# Stream in 1 hour!\n\n{username} is streaming {game}, see you soon!\n\n{embed}\n\n@{role}';
+const defaultConfirmationMessage='# Stream in {lead_time}!\n\n{username} is streaming {game}, see you soon!\n\n{embed}\n\n@{role}';
 const defaultCancellationMessage='# Stream Cancelled\n\n{username} has cancelled their stream.\n\nTheir next stream is on: {date and time}';
 function streamLinks(details){
  if(details.platform==='Twitch'&&details.username)return `https://twitch.tv/${details.username.replace(/^@/,'')}`;
@@ -30,10 +30,11 @@ function streamLinks(details){
 function renderConfirmationMessage(template,stream,details,config,nextStream=null){
  const username=details.platform==='Multi-platform'?details.username:`@${details.username.replace(/^@/,'')}`;
  const roleMention=config.role_id?`<@&${config.role_id}>`:`@${config.role_name||'streamers'}`;
- const values={username:username||'Your streamer',game:details.game||stream.title,title:stream.title,platform:details.platform,embed:streamLinks(details)||streamDestination(details),'date and time':nextStream?`<t:${discordTimestamp(nextStream.due)}:F>`:'',next_stream:nextStream?`<t:${discordTimestamp(nextStream.due)}:F>`:''};
+ const leadMinutes=[15,30,60].includes(Number(config.lead_minutes))?Number(config.lead_minutes):60;
+ const values={username:username||'Your streamer',game:details.game||stream.title,title:stream.title,platform:details.platform,embed:streamLinks(details)||streamDestination(details),lead_time:leadMinutes===60?'1 hour':`${leadMinutes} minutes`,'date and time':nextStream?`<t:${discordTimestamp(nextStream.due)}:F>`:'',next_stream:nextStream?`<t:${discordTimestamp(nextStream.due)}:F>`:''};
  let source=template||defaultConfirmationMessage;
  if(!nextStream)source=source.split('\n').filter(line=>!line.includes('{date and time}')&&!line.includes('{next_stream}')).join('\n').replace(/\n{3,}/g,'\n\n');
- return source.replaceAll('@{role}',roleMention).replaceAll('{role}',config.role_name||'streamers').replace(/\{(username|game|title|platform|embed|date and time|next_stream)\}/g,(_,key)=>values[key]||'').trim().slice(0,1950);
+ return source.replaceAll('@{role}',config.role_id?roleMention:'').replaceAll('{role}',config.role_name||'').replace(/\{(username|game|title|platform|embed|lead_time|date and time|next_stream)\}/g,(_,key)=>values[key]||'').replace(/\n{3,}/g,'\n\n').trim().slice(0,1950);
 }
 const confirmationButtons=streamId=>new ActionRowBuilder().addComponents(
  new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:yes`).setLabel('Yes, I’m streaming').setStyle(ButtonStyle.Success),
@@ -61,13 +62,15 @@ async function processStreamConfirmations(){
    if(streamDetails(stream.note).discordReminder===false)continue;
    const config=activeSettings.find(row=>row.user_id===stream.user_id),connection=connectionByUser.get(stream.user_id);
    if(!config||!connection?.external_user_id)continue;
+   const leadMinutes=[15,30,60].includes(Number(config.lead_minutes))?Number(config.lead_minutes):60;
+   if(new Date(stream.due).getTime()>now.getTime()+leadMinutes*60*1000)continue;
    const guild=client.guilds.cache.get(config.guild_id);
    if(!guild){await logActivity(config.guild_id,'stream_confirmation_error','warning','Confirmation server unavailable','B.E.I.P.I. is not connected to the selected Discord server.',{streamId:stream.id});continue}
    const {error:claimError}=await supabase.from('stream_confirmation_runs').insert({stream_id:stream.id,user_id:stream.user_id,discord_user_id:connection.external_user_id,status:'claiming'});
    if(claimError){if(claimError.code!=='23505')console.error('[stream-confirmations]',claimError.message);continue}
    try{
     const user=await client.users.fetch(connection.external_user_id);
-    const when=discordTimestamp(stream.due),details=streamDetails(stream.note),game=details.game?` playing **${details.game}**`:'',message=await user.send({content:`Hi ${connection.display_name||user.displayName}! Your **${stream.title}** stream${game} on ${streamDestination(details)} is scheduled for <t:${when}:F> (<t:${when}:R>).\n\nAre you still going live?`,components:[confirmationButtons(stream.id)]});
+    const when=discordTimestamp(stream.due),details=streamDetails(stream.note),game=details.game?` playing **${details.game}**`:'',message=await user.send({content:`Hi ${connection.display_name||user.displayName}! Your **${stream.title}** stream${game} on ${streamDestination(details)} is scheduled for <t:${when}:F> (<t:${when}:R>).\n\nYour ${leadMinutes}-minute check-in is here. Are you still going live?`,components:[confirmationButtons(stream.id)]});
     await supabase.from('stream_confirmation_runs').update({status:'pending',dm_message_id:message.id,sent_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('stream_id',stream.id);
     console.log(`[stream-confirmation] Asked ${user.tag} about ${stream.title}.`);
    }catch(error){
@@ -165,7 +168,7 @@ async function loadSettings(){
  const [{data,error},{data:owners,error:ownerError}]=await Promise.all([supabase.from('discord_live_settings').select('*'),supabase.from('discord_owner_live_settings').select('*')]);
  if(error){console.error('[settings]',error.message);return}
  if(ownerError&&ownerError.code!=='42P01'){console.error('[owner-settings]',ownerError.message);return}
- settings.clear();for(const row of data||[])settings.set(row.guild_id,row);
+ settings.clear();for(const row of data||[]){const rules=settings.get(row.guild_id)||[];rules.push(row);settings.set(row.guild_id,rules)}
  ownerSettings.clear();const ownerRows=owners||[],userIds=[...new Set(ownerRows.map(row=>row.user_id))];
  if(userIds.length){const {data:connections,error:connectionError}=await supabase.from('platform_connections').select('user_id,external_user_id').eq('platform','discord').in('user_id',userIds);if(connectionError)console.error('[owner-settings]',connectionError.message);else{const discordByUser=new Map((connections||[]).map(row=>[row.user_id,row.external_user_id]));for(const row of ownerRows){const discordId=discordByUser.get(row.user_id);if(discordId)ownerSettings.set(`${row.guild_id}:${discordId}`,row)}}}
  console.log(`[settings] Loaded ${settings.size} community server(s) and ${ownerSettings.size} personal notification(s).`);
@@ -173,55 +176,64 @@ async function loadSettings(){
 
 function serial(key,task){const previous=memberQueues.get(key)||Promise.resolve();const next=previous.catch(()=>{}).then(task).finally(()=>{if(memberQueues.get(key)===next)memberQueues.delete(key)});memberQueues.set(key,next);return next;}
 
-async function goLive(member,presence,config,personal){
- const communityEligible=Boolean(config?.discord_presence_enabled&&member.roles.cache.has(config.creator_role_id)&&!member.roles.cache.has(config.live_role_id));
- const personalEligible=Boolean(personal?.alert_channel_id);if(!communityEligible&&!personalEligible)return;
+const matchingCommunityRules=(member,rules=[])=>rules.filter(rule=>rule.discord_presence_enabled&&(!rule.creator_role_id||member.roles.cache.has(rule.creator_role_id)));
+
+async function postLiveTarget(member,activity,target,existingKeys){
+ if(existingKeys.has(target.sourceKey))return false;
+ if(target.liveRoleId){const role=member.guild.roles.cache.get(target.liveRoleId);if(!role?.editable){console.warn(`[roles] Cannot manage ${target.liveRoleName||target.liveRoleId} in ${member.guild.name}.`);await logActivity(member.guild.id,'role_error','warning','Could not add the live role',`B.E.I.P.I. cannot manage ${target.liveRoleName||'the configured live role'}.`,{roleId:target.liveRoleId})}else if(!member.roles.cache.has(role.id))await member.roles.add(role,'B.E.I.P.I. detected Discord Streaming activity')}
+ const channel=member.guild.channels.cache.get(target.channelId);let message=null;const rendered=renderTemplate(target.template,member,activity);const mentions=[target.everyone?'@everyone':'',target.roleId?`<@&${target.roleId}>`:''].filter(Boolean);const content=mentions.length?`${mentions.join(' ')}\n${rendered}`:rendered;
+ if(channel?.isTextBased())message=await channel.send({content,allowedMentions:{parse:target.everyone?['everyone']:[],roles:target.roleId?[target.roleId]:[]}});
+ else await logActivity(member.guild.id,'alert_error','warning','Live alert channel is unavailable','The configured alert channel could not be found or is not a text channel.',{channelId:target.channelId});
+ const {error}=await supabase.from('discord_live_events').upsert({guild_id:member.guild.id,member_id:member.id,source_key:target.sourceKey,message_id:message?.id||null,channel_id:channel?.id||target.channelId,started_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:'guild_id,member_id,source_key'});
+ if(error)console.error('[live-event]',error.message);else existingKeys.add(target.sourceKey);
+ return Boolean(message);
+}
+
+async function goLive(member,presence,rules=[],personal){
+ const community=matchingCommunityRules(member,rules),personalEligible=Boolean(personal?.alert_channel_id);if(!community.length&&!personalEligible)return;
  try{
-  const {data:existing}=await supabase.from('discord_live_events').select('id').eq('guild_id',member.guild.id).eq('member_id',member.id).maybeSingle();if(existing)return;
-  if(communityEligible){const role=member.guild.roles.cache.get(config.live_role_id);if(!role?.editable){console.warn(`[roles] Cannot manage ${config.live_role_name} in ${member.guild.name}.`);await logActivity(member.guild.id,'role_error','warning','Could not add the live role',`B.E.I.P.I. cannot manage ${config.live_role_name||'the configured live role'}.`,{roleId:config.live_role_id})}else await member.roles.add(role,'B.E.I.P.I. detected Discord Streaming activity')}
-  const channelId=personalEligible?personal.alert_channel_id:config.alert_channel_id;const channel=member.guild.channels.cache.get(channelId);let message=null;const activity=streamActivity(presence);
-  const template=personalEligible?(personal.message_template||ownerDefault):(config.creator_message_template||creatorDefault);const rendered=renderTemplate(template,member,activity);const personalMentions=personalEligible?[personal.everyone_enabled?'@everyone':'',personal.role_id?`<@&${personal.role_id}>`:''].filter(Boolean):[];const content=personalMentions.length?`${personalMentions.join(' ')}\n${rendered}`:rendered;
-  if(channel?.isTextBased())message=await channel.send({content,allowedMentions:personalEligible?{parse:personal.everyone_enabled?['everyone']:[],roles:personal.role_id?[personal.role_id]:[]}:{parse:[]}});
-  else await logActivity(member.guild.id,'alert_error','warning','Live alert channel is unavailable','The configured alert channel could not be found or is not a text channel.',{channelId});
-  const {error}=await supabase.from('discord_live_events').upsert({guild_id:member.guild.id,member_id:member.id,message_id:message?.id||null,channel_id:channel?.id||channelId,started_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:'guild_id,member_id'});
-  if(error)console.error('[live-event]',error.message);
-  await logActivity(member.guild.id,'live_started','info','Streamer detected live',`${member.displayName} started streaming on ${activity?.name||'a connected platform'}.`,{memberId:member.id,channelId:channel?.id||channelId,messageSent:Boolean(message)});
-  console.log(`[live] ${member.user.tag} in ${member.guild.name}`);
+  const {data:existing,error:existingError}=await supabase.from('discord_live_events').select('source_key').eq('guild_id',member.guild.id).eq('member_id',member.id);if(existingError)throw existingError;
+  const existingKeys=new Set((existing||[]).map(row=>row.source_key)),activity=streamActivity(presence),targets=[];
+  for(const rule of community)targets.push({sourceKey:`community:${rule.id}`,channelId:rule.alert_channel_id,template:rule.creator_message_template||creatorDefault,liveRoleId:rule.live_role_id,liveRoleName:rule.live_role_name});
+  if(personalEligible)targets.push({sourceKey:`personal:${personal.id}`,channelId:personal.alert_channel_id,template:personal.message_template||ownerDefault,everyone:personal.everyone_enabled,roleId:personal.role_id});
+  let sent=0;for(const target of targets)if(await postLiveTarget(member,activity,target,existingKeys))sent+=1;
+  if(sent)await logActivity(member.guild.id,'live_started','info','Streamer detected live',`${member.displayName} started streaming on ${activity?.name||'a connected platform'}.`,{memberId:member.id,notificationsSent:sent});
+  console.log(`[live] ${member.user.tag} in ${member.guild.name}: ${sent} notification(s)`);
  }catch(error){console.error('[live]',error);await logActivity(member.guild.id,'alert_error','error','Live notification failed',error instanceof Error?error.message:'Discord rejected the live notification.',{memberId:member.id})}
 }
 
-async function finishLive(member,config,personal){
+async function finishLive(member,rules=[],personal){
  try{
   const fresh=await member.guild.members.fetch(member.id).catch(()=>member);if(isStreaming(fresh.presence))return;
-  const role=config?.live_role_id?member.guild.roles.cache.get(config.live_role_id):null;if(role?.editable&&fresh.roles.cache.has(role.id))await fresh.roles.remove(role,'B.E.I.P.I. detected the stream ended');
-  const {data}=await supabase.from('discord_live_events').select('message_id,channel_id').eq('guild_id',member.guild.id).eq('member_id',member.id).maybeSingle();
-  const clean=personal?.delete_expired_alert!==false&&(config?.delete_expired_alert!==false);if(clean&&data?.message_id&&data.channel_id){const channel=member.guild.channels.cache.get(data.channel_id);if(channel?.isTextBased()){const message=await channel.messages.fetch(data.message_id).catch(()=>null);if(message)await message.delete().catch(()=>{})}}
+  for(const config of rules){if(!config.live_role_id)continue;const role=member.guild.roles.cache.get(config.live_role_id);if(role?.editable&&fresh.roles.cache.has(role.id))await fresh.roles.remove(role,'B.E.I.P.I. detected the stream ended')}
+  const {data:events,error:eventError}=await supabase.from('discord_live_events').select('message_id,channel_id,source_key').eq('guild_id',member.guild.id).eq('member_id',member.id);if(eventError)throw eventError;
+  const ruleBySource=new Map(rules.map(rule=>[`community:${rule.id}`,rule]));
+  for(const event of events||[]){const config=event.source_key?.startsWith('personal:')?personal:ruleBySource.get(event.source_key);if(config?.delete_expired_alert===false||!event.message_id||!event.channel_id)continue;const channel=member.guild.channels.cache.get(event.channel_id);if(channel?.isTextBased()){const message=await channel.messages.fetch(event.message_id).catch(()=>null);if(message)await message.delete().catch(()=>{})}}
   await supabase.from('discord_live_events').delete().eq('guild_id',member.guild.id).eq('member_id',member.id);
-  await logActivity(member.guild.id,'live_ended','info','Stream ended',`${member.displayName} is no longer detected as streaming.`,{memberId:member.id,expiredAlertRemoved:clean});
+  await logActivity(member.guild.id,'live_ended','info','Stream ended',`${member.displayName} is no longer detected as streaming.`,{memberId:member.id});
   console.log(`[offline] ${member.user.tag} in ${member.guild.name}`);
  }catch(error){console.error('[offline]',error);await logActivity(member.guild.id,'role_error','error','Could not finish the live session',error instanceof Error?error.message:'The live role or alert could not be cleaned up.',{memberId:member.id})}
 }
 
 async function reconcileAll(){
- for(const config of settings.values()){
-  if(!config.discord_presence_enabled)continue;
-  const guild=client.guilds.cache.get(config.guild_id);if(!guild)continue;
+ for(const [guildId,rules] of settings){
+  const guild=client.guilds.cache.get(guildId);if(!guild)continue;
   const members=guild.members.cache;
   for(const member of members.values()){
-   if(member.user.bot||!member.roles.cache.has(config.creator_role_id))continue;
+   if(member.user.bot)continue;const personal=ownerSettings.get(`${guild.id}:${member.id}`);if(!matchingCommunityRules(member,rules).length&&!personal)continue;
    const key=`${guild.id}:${member.id}`;
-   const personal=ownerSettings.get(key);if(isStreaming(member.presence)){const timer=pendingOffline.get(key);if(timer){clearTimeout(timer);pendingOffline.delete(key)}void serial(key,()=>goLive(member,member.presence,config,personal))}
-   else if(member.roles.cache.has(config.live_role_id)&&!pendingOffline.has(key)){const timer=setTimeout(()=>{pendingOffline.delete(key);void serial(key,()=>finishLive(member,config,personal))},120000);pendingOffline.set(key,timer)}
+   if(isStreaming(member.presence)){const timer=pendingOffline.get(key);if(timer){clearTimeout(timer);pendingOffline.delete(key)}void serial(key,()=>goLive(member,member.presence,rules,personal))}
+   else if(rules.some(config=>config.live_role_id&&member.roles.cache.has(config.live_role_id))&&!pendingOffline.has(key)){const timer=setTimeout(()=>{pendingOffline.delete(key);void serial(key,()=>finishLive(member,rules,personal))},120000);pendingOffline.set(key,timer)}
   }
  }
- for(const [key,personal] of ownerSettings){const [guildId,memberId]=key.split(':');const guild=client.guilds.cache.get(guildId);if(!guild)continue;const member=guild.members.cache.get(memberId);if(!member||member.user.bot||!isStreaming(member.presence))continue;const timer=pendingOffline.get(key);if(timer){clearTimeout(timer);pendingOffline.delete(key)}void serial(key,()=>goLive(member,member.presence,settings.get(guildId),personal))}
+ for(const [key,personal] of ownerSettings){const [guildId,memberId]=key.split(':');const guild=client.guilds.cache.get(guildId);if(!guild)continue;const member=guild.members.cache.get(memberId);if(!member||member.user.bot||!isStreaming(member.presence))continue;const timer=pendingOffline.get(key);if(timer){clearTimeout(timer);pendingOffline.delete(key)}void serial(key,()=>goLive(member,member.presence,settings.get(guildId)||[],personal))}
 }
 
 client.on(Events.PresenceUpdate,(oldPresence,newPresence)=>{
- const member=newPresence.member;if(!member)return;const key=`${newPresence.guild.id}:${member.id}`,config=settings.get(newPresence.guild.id),personal=ownerSettings.get(key),communityEligible=Boolean(config?.discord_presence_enabled&&member.roles.cache.has(config.creator_role_id));if(!communityEligible&&!personal)return;
+ const member=newPresence.member;if(!member)return;const key=`${newPresence.guild.id}:${member.id}`,rules=settings.get(newPresence.guild.id)||[],personal=ownerSettings.get(key),communityEligible=matchingCommunityRules(member,rules).length>0;if(!communityEligible&&!personal)return;
  const streaming=isStreaming(newPresence),wasStreaming=isStreaming(oldPresence);
- if(streaming){const timer=pendingOffline.get(key);if(timer){clearTimeout(timer);pendingOffline.delete(key)}if(!wasStreaming)void serial(key,()=>goLive(member,newPresence,config,personal));return}
- if(wasStreaming){const timer=setTimeout(()=>{pendingOffline.delete(key);void serial(key,()=>finishLive(member,config,personal))},120000);pendingOffline.set(key,timer)}
+ if(streaming){const timer=pendingOffline.get(key);if(timer){clearTimeout(timer);pendingOffline.delete(key)}if(!wasStreaming)void serial(key,()=>goLive(member,newPresence,rules,personal));return}
+ if(wasStreaming){const timer=setTimeout(()=>{pendingOffline.delete(key);void serial(key,()=>finishLive(member,rules,personal))},120000);pendingOffline.set(key,timer)}
 });
 client.on(Events.MessageReactionAdd,(reaction,user)=>void handleReaction(reaction,user,true));
 client.on(Events.MessageReactionRemove,(reaction,user)=>void handleReaction(reaction,user,false));

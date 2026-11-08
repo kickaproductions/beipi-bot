@@ -5,9 +5,9 @@ import {getPlatformConnection,savePlatformConnection} from '@/lib/platform-conne
 import {DISCORD_SESSION_COOKIE,encryptDiscordSession,newestDiscordSession,refreshDiscordSession} from '@/app/api/auth/discord/session';
 
 export const runtime='nodejs';
-const defaultMessage='# Stream in 1 hour!\n\n{username} is streaming {game}, see you soon!\n\n{embed}\n\n@{role}';
+const defaultMessage='# Stream in {lead_time}!\n\n{username} is streaming {game}, see you soon!\n\n{embed}\n\n@{role}';
 const defaultCancelMessage='# Stream Cancelled\n\n{username} has cancelled their stream.\n\nTheir next stream is on: {date and time}';
-const schema=z.object({enabled:z.boolean(),holidayMode:z.boolean().default(false),postToDiscord:z.boolean().default(true),guildId:z.string().max(30).default(''),channelId:z.string().max(30).default(''),roleId:z.string().max(30).default(''),messageTemplate:z.string().min(1).max(2000).default(defaultMessage),cancelMessageTemplate:z.string().min(1).max(2000).default(defaultCancelMessage)});
+const schema=z.object({enabled:z.boolean(),holidayMode:z.boolean().default(false),postToDiscord:z.boolean().default(true),leadMinutes:z.union([z.literal(15),z.literal(30),z.literal(60)]).default(60),guildId:z.string().max(30).default(''),channelId:z.string().max(30).default(''),roleId:z.string().max(30).default(''),messageTemplate:z.string().min(1).max(2000).default(defaultMessage),cancelMessageTemplate:z.string().min(1).max(2000).default(defaultCancelMessage)});
 const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'no-store'}});
 type Guild={id:string;name:string;owner:boolean;permissions:string};
 type DiscordChannel={id:string;name:string;type:number};
@@ -33,7 +33,7 @@ export async function GET(){
       supabase.from('platform_connections').select('external_user_id').eq('user_id',user.id).eq('platform','discord').maybeSingle()
     ]);
     if(settingsError||runsError||discordError)throw settingsError||runsError||discordError;
-    return json({connectedDiscord:Boolean(discord?.external_user_id),settings:settings?{enabled:settings.enabled,holidayMode:Boolean(settings.holiday_mode),postToDiscord:settings.post_to_discord!==false,guildId:settings.guild_id||'',guildName:settings.guild_name||'',channelId:settings.channel_id||'',channelName:settings.channel_name||'',roleId:settings.role_id||'',roleName:settings.role_name||'',messageTemplate:settings.message_template||defaultMessage,cancelMessageTemplate:settings.cancel_message_template||defaultCancelMessage}:null,statuses:Object.fromEntries((runs||[]).map(run=>[run.stream_id,{status:run.status,sentAt:run.sent_at,respondedAt:run.responded_at}]))});
+    return json({connectedDiscord:Boolean(discord?.external_user_id),settings:settings?{enabled:settings.enabled,holidayMode:Boolean(settings.holiday_mode),postToDiscord:settings.post_to_discord!==false,leadMinutes:[15,30,60].includes(Number(settings.lead_minutes))?Number(settings.lead_minutes):60,guildId:settings.guild_id||'',guildName:settings.guild_name||'',channelId:settings.channel_id||'',channelName:settings.channel_name||'',roleId:settings.role_id||'',roleName:settings.role_name||'',messageTemplate:settings.message_template||defaultMessage,cancelMessageTemplate:settings.cancel_message_template||defaultCancelMessage}:null,statuses:Object.fromEntries((runs||[]).map(run=>[run.stream_id,{status:run.status,sentAt:run.sent_at,respondedAt:run.responded_at}]))});
   }catch{return json({error:'B.E.I.P.I. could not load stream confirmations. Run the latest Supabase migration if this is your first visit.'},500)}
 }
 
@@ -46,7 +46,7 @@ export async function PUT(request:NextRequest){
     const value=parsed.data;
     let guildName='',channelName='',roleName='',refreshedCookie:string|undefined;
     if(value.enabled&&value.postToDiscord){
-      if(!value.guildId||!value.channelId||!value.roleId)return json({error:'Choose a Discord server, channel and notification role.'},400);
+      if(!value.guildId||!value.channelId)return json({error:'Choose a Discord server and channel.'},400);
       const selected=await selectedDiscordSession(request);let session=selected.session;
       if(!session)return json({error:'Connect Discord before turning on stream confirmations.'},401);
       let guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'});
@@ -65,13 +65,13 @@ export async function PUT(request:NextRequest){
       if(!channelResponse.ok||!roleResponse.ok)return json({error:'Discord could not check that channel and role right now.'},502);
       const channel=(await channelResponse.json() as DiscordChannel[]).find(item=>item.id===value.channelId&&(item.type===0||item.type===5));
       if(!channel)return json({error:'Choose a text or announcement channel B.E.I.P.I. can access.'},400);
-      const role=(await roleResponse.json() as DiscordRole[]).find(item=>item.id===value.roleId&&!item.managed);
-      if(!role)return json({error:'Choose a Discord role B.E.I.P.I. can mention.'},400);
-      guildName=guild.name;channelName=channel.name;roleName=role.name;
+      const role=value.roleId?(await roleResponse.json() as DiscordRole[]).find(item=>item.id===value.roleId&&!item.managed):null;
+      if(value.roleId&&!role)return json({error:'Choose a Discord role B.E.I.P.I. can mention, or leave the role empty.'},400);
+      guildName=guild.name;channelName=channel.name;roleName=role?.name||'';
     }
-    const {data,error}=await supabase.from('stream_confirmation_settings').upsert({user_id:user.id,enabled:value.enabled,holiday_mode:value.holidayMode,post_to_discord:value.postToDiscord,guild_id:value.postToDiscord?value.guildId:null,guild_name:value.postToDiscord?guildName:null,channel_id:value.postToDiscord?value.channelId:null,channel_name:value.postToDiscord?channelName:null,role_id:value.postToDiscord?value.roleId:null,role_name:value.postToDiscord?roleName:null,message_template:value.messageTemplate,cancel_message_template:value.cancelMessageTemplate,lead_minutes:60,updated_at:new Date().toISOString()},{onConflict:'user_id'}).select('*').single();
+    const {data,error}=await supabase.from('stream_confirmation_settings').upsert({user_id:user.id,enabled:value.enabled,holiday_mode:value.holidayMode,post_to_discord:value.postToDiscord,guild_id:value.postToDiscord?value.guildId:null,guild_name:value.postToDiscord?guildName:null,channel_id:value.postToDiscord?value.channelId:null,channel_name:value.postToDiscord?channelName:null,role_id:value.postToDiscord?value.roleId:null,role_name:value.postToDiscord?roleName:null,message_template:value.messageTemplate,cancel_message_template:value.cancelMessageTemplate,lead_minutes:value.leadMinutes,updated_at:new Date().toISOString()},{onConflict:'user_id'}).select('*').single();
     if(error)throw error;
-    const response=json({settings:{enabled:data.enabled,holidayMode:Boolean(data.holiday_mode),postToDiscord:data.post_to_discord!==false,guildId:data.guild_id||'',guildName:data.guild_name||'',channelId:data.channel_id||'',channelName:data.channel_name||'',roleId:data.role_id||'',roleName:data.role_name||'',messageTemplate:data.message_template||defaultMessage,cancelMessageTemplate:data.cancel_message_template||defaultCancelMessage}});
+    const response=json({settings:{enabled:data.enabled,holidayMode:Boolean(data.holiday_mode),postToDiscord:data.post_to_discord!==false,leadMinutes:Number(data.lead_minutes)||60,guildId:data.guild_id||'',guildName:data.guild_name||'',channelId:data.channel_id||'',channelName:data.channel_name||'',roleId:data.role_id||'',roleName:data.role_name||'',messageTemplate:data.message_template||defaultMessage,cancelMessageTemplate:data.cancel_message_template||defaultCancelMessage}});
     if(refreshedCookie)response.cookies.set(DISCORD_SESSION_COOKIE,refreshedCookie,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});
     return response;
   }catch(error){const code=typeof error==='object'&&error&&'code' in error?String(error.code):'';return json({error:code==='42703'?'Run the latest Supabase migration, then save these settings again.':'B.E.I.P.I. could not save stream confirmations.'},500)}
