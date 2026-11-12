@@ -23,20 +23,24 @@ async function getAppToken(clientId: string, clientSecret: string) {
 }
 
 export async function GET(request: NextRequest) {
-    const name = request.nextUrl.searchParams.get('name')?.trim();
-    if (!name || name.length > 200) return NextResponse.json({ imageUrl: null }, { status: 400 });
+    const query = request.nextUrl.searchParams.get('query')?.trim();
+    const searching = query !== undefined;
+    const name = searching ? query : request.nextUrl.searchParams.get('name')?.trim();
+    const empty = searching ? { categories: [] } : { imageUrl: null };
+    if (!name || name.length > 200 || (searching && name.length < 2)) return NextResponse.json(empty, { status: 400 });
 
     try {
         const supabase = await createClient();
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return NextResponse.json({ imageUrl: null }, { status: 401 });
+        if (!user) return NextResponse.json(empty, { status: 401 });
 
         const clientId = process.env.TWITCH_CLIENT_ID;
         const clientSecret = process.env.TWITCH_CLIENT_SECRET;
-        if (!clientId || !clientSecret) return NextResponse.json({ imageUrl: null }, { status: 503 });
+        if (!clientId || !clientSecret) return NextResponse.json(empty, { status: 503 });
 
-        const url = new URL('https://api.twitch.tv/helix/games');
-        url.searchParams.set('name', name);
+        const url = new URL(searching ? 'https://api.twitch.tv/helix/search/categories' : 'https://api.twitch.tv/helix/games');
+        url.searchParams.set(searching ? 'query' : 'name', name);
+        if (searching) url.searchParams.set('first', '5');
         const lookup = (token: string) => fetch(url, {
             headers: { 'Client-Id': clientId, Authorization: 'Bearer ' + token },
             cache: 'no-store',
@@ -47,14 +51,23 @@ export async function GET(request: NextRequest) {
             if (appToken?.value === token) appToken = undefined;
             response = await lookup(await getAppToken(clientId, clientSecret));
         }
-        if (!response.ok) return NextResponse.json({ imageUrl: null }, { status: 502 });
+        if (!response.ok) return NextResponse.json(empty, { status: 502 });
 
-        const { data } = await response.json() as { data: { box_art_url?: string }[] };
+        const { data } = await response.json() as { data: { id: string; name: string; box_art_url?: string }[] };
+        if (searching) {
+            return NextResponse.json({
+                categories: data.slice(0, 5).map(category => ({
+                    id: category.id,
+                    name: category.name,
+                    imageUrl: category.box_art_url?.startsWith('https://static-cdn.jtvnw.net/') ? category.box_art_url : null,
+                })),
+            });
+        }
         const imageUrl = data[0]?.box_art_url?.replace('{width}', '144').replace('{height}', '192');
         return NextResponse.json({
             imageUrl: imageUrl?.startsWith('https://static-cdn.jtvnw.net/') ? imageUrl : null,
         });
     } catch {
-        return NextResponse.json({ imageUrl: null }, { status: 502 });
+        return NextResponse.json(empty, { status: 502 });
     }
 }

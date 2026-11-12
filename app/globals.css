@@ -982,8 +982,17 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .stream-visual-settings label{display:flex;align-items:flex-start;gap:9px}
 .stream-visual-settings input{width:17px;height:17px;flex:none;margin:2px 0 0;accent-color:var(--purple)}
 .stream-visual-settings p{color:var(--muted);font-size:.8rem}
-.stream-summary{flex-wrap:wrap}
+:is(.stream-summary:has(> .stream-readiness-pie),.stream-summary:has(> .stream-game-art)){
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) minmax(0,42%);
+}
 .stream-summary>div{min-width:0;overflow-wrap:anywhere}
+.stream-summary>:is(.stream-readiness-pie,.stream-game-art){place-self:center;max-width:100%}
+@media(max-width:1100px){
+  :is(.stream-summary:has(> .stream-readiness-pie),.stream-summary:has(> .stream-game-art)){
+    grid-template-columns:auto minmax(0,1fr) minmax(0,26%);
+  }
+}
 .stream-readiness-pie{width:clamp(48px,8vw,76px);aspect-ratio:1;flex:none;border:1px solid var(--line);border-radius:50%;background:conic-gradient(var(--purple) var(--readiness),var(--line) 0)}
 .stream-game-art{display:block;flex:none;width:clamp(48px,8vw,72px);height:auto;border-radius:7px}
 .stream-summary .stream-game-name{margin-top:5px;font-weight:700;color:var(--ink)}
@@ -991,3 +1000,10 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
   .checklist-toolbar-start{align-items:stretch;flex-direction:column}
   .stream-visual-settings{margin-inline:18px}
 }
+
+.twitch-game-field{display:grid;gap:7px}
+.twitch-game-field ul{list-style:none;margin:0;padding:4px;border:1px solid var(--line);border-radius:9px;background:var(--bg)}
+.twitch-game-field li{display:flex;align-items:center;gap:9px;min-height:38px;padding:4px 8px;border-radius:6px;color:var(--ink);cursor:pointer;overflow-wrap:anywhere}
+.twitch-game-field li:hover,.twitch-game-field li[aria-selected=true]{background:var(--light);outline:1px solid var(--purple)}
+.twitch-game-field li img{flex:none;border-radius:3px}
+.twitch-game-field small{color:var(--muted)}
