@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
                 })),
             });
         }
-        const imageUrl = data[0]?.box_art_url?.replace('{width}', '144').replace('{height}', '192');
+        const imageUrl = data[0]?.box_art_url?.replace('{width}', '240').replace('{height}', '320');
         return NextResponse.json({
             imageUrl: imageUrl?.startsWith('https://static-cdn.jtvnw.net/') ? imageUrl : null,
         });

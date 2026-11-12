@@ -25,8 +25,8 @@ export default function StreamGameArt({ game }: { game: string }) {
             className="stream-game-art"
             src={imageUrl}
             alt=""
-            width={72}
-            height={96}
+            width={120}
+            height={160}
             unoptimized
             onError={() => setImageUrl(null)}
         />
