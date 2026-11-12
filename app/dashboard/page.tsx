@@ -15,5 +15,5 @@ export default async function DashboardPage(){
   const trusted=Boolean(user.app_metadata?.trusted_access);
   const agreement=approved&&!trusted?await supabase.from('beta_nda_acceptances').select('id').eq('user_id',user.id).eq('agreement_version',NDA_VERSION).maybeSingle():{data:null,error:null};
   const agreementAccepted=trusted?true:agreement.error?profile?.role==='developer':Boolean(agreement.data);
-  return <Dashboard userName={userName} initialUsername={profile?.username||''} isDeveloper={profile?.role==='developer'} isTester={approved&&agreementAccepted}/>;
+  return <Dashboard accountId={user.id} userName={userName} initialUsername={profile?.username||''} isDeveloper={profile?.role==='developer'} isTester={approved&&agreementAccepted}/>;
 }

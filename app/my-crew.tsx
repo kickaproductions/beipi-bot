@@ -117,7 +117,7 @@ function inputDate(value: string | null) { if (!value)
     return ''; const date = new Date(value), pad = (part: number) => String(part).padStart(2, '0'); return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`; }
 function inputTime(value: string | null) { if (!value)
     return ''; const date = new Date(value), pad = (part: number) => String(part).padStart(2, '0'); return `${pad(date.getHours())}:${pad(date.getMinutes())}`; }
-function streamDetails(note: string): StreamDetails { try {
+export function streamDetails(note: string): StreamDetails { try {
     const value = JSON.parse(note) as Partial<StreamDetails> & {
         v?: number;
     };

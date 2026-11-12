@@ -2,7 +2,8 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
 import { House, Bell, ClipboardCheck, Lightbulb, Link2, Users, UserPlus, Plus, ArrowUpRight, ChevronRight, Check, Clock, Trash2, Pencil, Grid2X2, List, X, ChevronDown, ShieldCheck, Leaf, Menu, RotateCcw, Heart, Sparkles, Radio, Hash, Moon, Sun, Settings, BarChart3, LayoutDashboard, CalendarDays, MessageSquareText, LogOut, LockKeyhole, Accessibility, Type, Contrast, GripVertical, ArrowUp, ArrowDown } from 'lucide-react';
 import DiscordSetup from './discord-setup';
-import MyCrew from './my-crew';
+import MyCrew, { streamDetails } from './my-crew';
+import StreamGameArt from './stream-game-art';
 import { createClient } from '@/lib/supabase/client';
 type Item = {
     id: string;
@@ -97,12 +98,41 @@ const futurePlatforms = [
     { name: 'Facebook', className: 'facebook', mark: <span>f</span>, copy: 'Keep Facebook streams visible alongside your other channels.', note: 'Platform access to be reviewed' },
     { name: 'Custom RTMP', className: 'rtmp', mark: <Radio size={23}/>, copy: 'Save another streaming destination or custom broadcast endpoint.', note: 'Manual setup planned' }
 ];
-export default function Dashboard({ userName = 'Creator', initialUsername = '', isDeveloper = false, isTester = false }: {
+const DEFAULT_STREAM_VISUALS = { readinessPie: false, gameArt: false };
+
+export default function Dashboard({ accountId = '', userName = 'Creator', initialUsername = '', isDeveloper = false, isTester = false }: {
+    accountId?: string;
     userName?: string;
     initialUsername?: string;
     isDeveloper?: boolean;
     isTester?: boolean;
 }) {
+    const [visualSettingsOpen, setVisualSettingsOpen] = useState(false);
+    const [streamVisuals, setStreamVisuals] = useState(DEFAULT_STREAM_VISUALS);
+    const streamVisualsKey = 'beipi-stream-visuals:' + accountId;
+
+    useEffect(() => {
+        try {
+            const saved = JSON.parse(window.localStorage.getItem(streamVisualsKey) ?? 'null');
+            setStreamVisuals({
+                readinessPie: saved?.readinessPie === true,
+                gameArt: saved?.gameArt === true,
+            });
+        } catch {
+            setStreamVisuals(DEFAULT_STREAM_VISUALS);
+        }
+    }, [streamVisualsKey]);
+
+    function updateStreamVisual(key: keyof typeof DEFAULT_STREAM_VISUALS, enabled: boolean) {
+        const updated = { ...streamVisuals, [key]: enabled };
+        setStreamVisuals(updated);
+        try {
+            window.localStorage.setItem(streamVisualsKey, JSON.stringify(updated));
+        } catch {
+            // Keep the current choice usable when local storage is unavailable.
+        }
+    }
+
     const [discordDirty, setDiscordDirty] = useState(false);
     const [textSize, setTextSize] = useState(DEFAULT_TEXT_SIZE);
     const [view, setView] = useState<View>('Home'), [settingsTab, setSettingsTab] = useState<SettingsTab>('account'), [initialCrewSpace, setInitialCrewSpace] = useState(''), [crewInviteOpen, setCrewInviteOpen] = useState(false), [streamTab, setStreamTab] = useState<StreamTab>('overview'), [items, setItems] = useState<Item[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState(''), [toast, setToast] = useState(''), [busy, setBusy] = useState(false), [dialog, setDialog] = useState<string | null>(null), [filter, setFilter] = useState('open'), [menu, setMenu] = useState(false), [focus, setFocus] = useState(false), [dark, setDark] = useState(true), [highContrast, setHighContrast] = useState(false), [reducedMotion, setReducedMotion] = useState(false), [underlineLinks, setUnderlineLinks] = useState(false), [preferencesLoaded, setPreferencesLoaded] = useState(false), [username, setUsername] = useState(initialUsername), [usernameDraft, setUsernameDraft] = useState(initialUsername), [usernameBusy, setUsernameBusy] = useState(false), [usernameError, setUsernameError] = useState(''), [identityName, setIdentityName] = useState(initialUsername || userName);
@@ -199,6 +229,8 @@ export default function Dashboard({ userName = 'Creator', initialUsername = '', 
     } } window.addEventListener('keydown', key); return () => window.removeEventListener('keydown', key); }, [dialog]);
     const open = items.filter(i => !i.done), reminderOrder = items.filter(i => i.kind === 'reminder').sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)), reminders = reminderOrder.filter(i => !i.done), checklist = items.filter(i => i.kind === 'checklist'), preChecklist = checklist.filter(i => (i.checklistPhase || 'pre') === 'pre').sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)), preChecked = preChecklist.filter(i => i.done).length, activeChecklist = checklist.filter(i => (i.checklistPhase || 'pre') === checklistPhase).sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)), activeChecked = activeChecklist.filter(i => i.done).length;
     const nextStream = items.filter(item => item.kind === 'crew-stream' && !item.done && item.due && new Date(item.due).getTime() > Date.now()).sort((left, right) => new Date(left.due!).getTime() - new Date(right.due!).getTime())[0];
+    const nextGame = nextStream ? streamDetails(nextStream.note).game.trim() : '';
+    const readinessPercent = preChecklist.length ? Math.round(preChecked / preChecklist.length * 100) : 0;
     async function request(method: string, body?: unknown, id?: string) { setBusy(true); setError(''); try {
         const r = await fetch('/api/items' + (id ? '?id=' + encodeURIComponent(id) : ''), { method, headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
         const data = await r.json() as Item & {
@@ -334,10 +366,24 @@ export default function Dashboard({ userName = 'Creator', initialUsername = '', 
                     { id: 'schedule' as const, label: 'Schedule', description: 'Plan streams and choose when Pip checks in.', icon: <CalendarDays size={22}/>, tone: 'lavender' },
                     { id: 'analytics' as const, label: 'Analytics', description: 'Clear insights from connected platforms.', icon: <BarChart3 size={22}/>, tone: 'gold' }
                 ].map(item => <button key={item.id} className={'card discord-section-button ' + (streamTab === item.id ? 'active' : '')} aria-expanded={streamTab === item.id} onClick={() => setStreamTab(item.id)}><span className={'stat-icon ' + item.tone}>{item.icon}</span><span><strong>{item.label}</strong><small>{item.description}</small></span><ChevronRight size={19}/></button>)}</nav>
- {streamTab === 'overview' && <><div className="stream-overview-grid"><section className="card stream-summary"><span className="stat-icon mint"><ClipboardCheck size={21}/></span><div><small>STREAM READINESS</small><h2>{preChecklist.length ? Math.round(preChecked / preChecklist.length * 100) : 0}% ready</h2><p>{preChecked} of {preChecklist.length} pre-stream steps complete.</p><button className="text-button" onClick={() => setStreamTab('checklist')}>Open checklist <ArrowUpRight size={15}/></button></div></section><section className="card stream-summary"><span className="stat-icon lavender"><CalendarDays size={21}/></span><div><small>NEXT STREAM</small><h2>{nextStream ? new Date(nextStream.due!).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Nothing booked yet'}</h2><p>{nextStream ? `${new Date(nextStream.due!).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · ${nextStream.title}` : 'Add your next stream when you are ready.'}</p><button className="text-button" onClick={() => setStreamTab('schedule')}>{nextStream ? 'Open schedule' : 'Add a stream'} <ArrowUpRight size={15}/></button></div></section></div><section className="card analytics-preview"><div><span className="eyebrow">YOUR STREAMING HOME</span><h2>Everything you need before you go live.</h2><p>Use your checklist, plan your next stream and keep the little details together in one calm space.</p></div><BeipiWriting /></section></>}
+ {streamTab === 'overview' && <><div className="stream-overview-grid"><section className="card stream-summary"><span className="stat-icon mint"><ClipboardCheck size={21}/></span><div><small>STREAM READINESS</small><h2>{readinessPercent}% ready</h2><p>{preChecked} of {preChecklist.length} pre-stream steps complete.</p><button className="text-button" onClick={() => setStreamTab('checklist')}>Open checklist <ArrowUpRight size={15}/></button></div>
+    {streamVisuals.readinessPie && <span className="stream-readiness-pie" aria-hidden="true" style={{ '--readiness': readinessPercent + '%' } as CSSProperties}/>}
+    </section><section className="card stream-summary"><span className="stat-icon lavender"><CalendarDays size={21}/></span><div><small>NEXT STREAM</small><h2>{nextStream ? new Date(nextStream.due!).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Nothing booked yet'}</h2><p>{nextStream ? `${new Date(nextStream.due!).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · ${nextStream.title}` : 'Add your next stream when you are ready.'}</p>{streamVisuals.gameArt && nextGame && <p className="stream-game-name">{nextGame}</p>}<button className="text-button" onClick={() => setStreamTab('schedule')}>{nextStream ? 'Open schedule' : 'Add a stream'} <ArrowUpRight size={15}/></button></div>
+    {streamVisuals.gameArt && nextGame && <StreamGameArt key={nextGame} game={nextGame}/>}
+    </section></div><section className="card analytics-preview"><div><span className="eyebrow">YOUR STREAMING HOME</span><h2>Everything you need before you go live.</h2><p>Use your checklist, plan your next stream and keep the little details together in one calm space.</p></div><BeipiWriting /></section></>}
  {streamTab === 'checklist' && <section className="card full checklist-library">
   <div className="card-heading checklist-heading"><div><h2>Your stream routines</h2><p>Drag cards to arrange them. Pip saves your order automatically.</p></div><div className="layout-toggle" aria-label="Choose checklist layout"><button className={checklistLayout === 'list' ? 'chosen' : ''} aria-label="List view" aria-pressed={checklistLayout === 'list'} onClick={() => setChecklistLayout('list')}><List size={17}/></button><button className={checklistLayout === 'grid' ? 'chosen' : ''} aria-label="Grid view" aria-pressed={checklistLayout === 'grid'} onClick={() => setChecklistLayout('grid')}><Grid2X2 size={17}/></button></div></div>
-  <div className="checklist-toolbar"><div className="checklist-phase-tabs" role="tablist" aria-label="Checklist type"><button role="tab" aria-selected={checklistPhase === 'pre'} className={checklistPhase === 'pre' ? 'chosen' : ''} onClick={() => { setChecklistPhase('pre'); setFilter('open'); }}><ClipboardCheck size={17}/> Pre-Stream Checklist</button><button role="tab" aria-selected={checklistPhase === 'post'} className={checklistPhase === 'post' ? 'chosen' : ''} onClick={() => { setChecklistPhase('post'); setFilter('open'); }}><Sparkles size={17}/> Post Stream Checklist</button></div><div className="tabs">{['open', 'done', 'all'].map(f => <button key={f} className={filter === f ? 'chosen' : ''} onClick={() => setFilter(f)}>{f === 'open' ? 'To do' : f === 'done' ? 'Done' : 'All'}</button>)}</div></div>
+  <div className="checklist-toolbar"><div className="checklist-toolbar-start"><div className="checklist-phase-tabs" role="tablist" aria-label="Checklist type"><button role="tab" aria-selected={checklistPhase === 'pre'} className={checklistPhase === 'pre' ? 'chosen' : ''} onClick={() => { setChecklistPhase('pre'); setFilter('open'); }}><ClipboardCheck size={17}/> Pre-Stream Checklist</button><button role="tab" aria-selected={checklistPhase === 'post'} className={checklistPhase === 'post' ? 'chosen' : ''} onClick={() => { setChecklistPhase('post'); setFilter('open'); }}><Sparkles size={17}/> Post Stream Checklist</button></div>
+    <button type="button" className="outline stream-visual-settings-button" aria-expanded={visualSettingsOpen} aria-controls={visualSettingsOpen ? 'stream-visual-settings' : undefined} onClick={() => setVisualSettingsOpen(!visualSettingsOpen)}>
+        <Settings size={16}/> Visual settings
+    </button>
+  </div><div className="tabs">{['open', 'done', 'all'].map(f => <button key={f} className={filter === f ? 'chosen' : ''} onClick={() => setFilter(f)}>{f === 'open' ? 'To do' : f === 'done' ? 'Done' : 'All'}</button>)}</div></div>
+  {visualSettingsOpen && <fieldset id="stream-visual-settings" className="stream-visual-settings">
+    <legend>My Stream overview</legend>
+    <label><input type="checkbox" checked={streamVisuals.readinessPie} onChange={event => updateStreamVisual('readinessPie', event.currentTarget.checked)}/> Show readiness pie chart</label>
+    <label><input type="checkbox" checked={streamVisuals.gameArt} onChange={event => updateStreamVisual('gameArt', event.currentTarget.checked)}/> Show Twitch game artwork for the next stream</label>
+    <p>Artwork appears when the scheduled game name matches a Twitch category.</p>
+  </fieldset>}
   {activeChecklist.length > 0 && <div className="checklist-summary"><span>{activeChecked} of {activeChecklist.length} steps complete</span><button className="text-button" disabled={busy} onClick={() => void resetChecklist()}><RotateCcw size={14}/> Reset this checklist</button></div>}
   {(() => { const list = activeChecklist.filter(i => filter === 'all' || i.done === (filter === 'done')); return list.length ? rows(list, false, checklistLayout, 'checklist') : activeChecklist.length ? <div className="empty"><Check size={28}/><h3>{filter === 'done' ? 'Nothing completed yet.' : 'You’re all caught up.'}</h3><p>Your saved steps are still in the other tabs.</p></div> : empty('checklist'); })()}
  </section>}
