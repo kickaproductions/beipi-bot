@@ -99,6 +99,8 @@ const futurePlatforms = [
     { name: 'Custom RTMP', className: 'rtmp', mark: <Radio size={23}/>, copy: 'Save another streaming destination or custom broadcast endpoint.', note: 'Manual setup planned' }
 ];
 const COMPLETION_MESSAGE = 'One less thing to remember. Nice work!';
+const CONFETTI_COLOURS = ['#c9a6f5', '#f4a9cc', '#ffe291', '#9ae8bc', '#a8d9ff'];
+const CONFETTI_DIRECTIONS = [-105, -85, -70, -52, -35, -18, 3, 24, 42, 61, 80, 100];
 const DEFAULT_STREAM_VISUALS = { readinessPie: false, gameArt: false };
 
 export default function Dashboard({ accountId = '', userName = 'Creator', initialUsername = '', isDeveloper = false, isTester = false }: {
@@ -483,9 +485,18 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
  </>}
  <footer><span><Heart size={13}/> Made for brains with a few extra tabs open.</span><span>B.E.I.P.I · The streamer’s companion</span></footer>
  </main></div>{toast && <div className="toast" role="status">
-    {toast === COMPLETION_MESSAGE
-        ? <span key={completionCount} className="completion-tick" aria-hidden="true"><Check size={18} strokeWidth={3}/></span>
-        : <Check size={17} aria-hidden="true"/>}
+    <Check size={17} aria-hidden="true"/>
+    {toast === COMPLETION_MESSAGE && !reducedMotion && (
+        <span key={completionCount} className="completion-confetti" aria-hidden="true">
+            {CONFETTI_DIRECTIONS.map((angle, index) => (
+                <i key={angle} style={{
+                    '--confetti-angle': angle + 'deg',
+                    '--confetti-distance': (38 + index % 3 * 14) + 'px',
+                    '--confetti-colour': CONFETTI_COLOURS[index % CONFETTI_COLOURS.length],
+                } as CSSProperties}/>
+            ))}
+        </span>
+    )}
     {toast}
  </div>}
  {dialog && <div className="modal-backdrop" onClick={event => { if (event.target === event.currentTarget && !busy) setDialog(null); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="close" aria-label="Close dialog" disabled={busy} onClick={() => setDialog(null)}><X size={20}/></button><span className="stat-icon lavender">{editingItem ? <Pencil size={21}/> : <Plus size={23}/>}</span><h2 id="dialog-title">{editingItem ? `Edit ${dialog === 'idea' ? 'idea' : dialog === 'reminder' ? 'reminder' : 'entry'}.` : dialog === 'idea' ? 'Keep that thought.' : dialog === 'checklist' ? 'One little step.' : dialog === 'connection' ? 'Save a channel reference.' : 'Let’s remember this.'}</h2><p>{editingItem ? 'Change anything you need, then save it again.' : dialog === 'connection' ? 'This saves a reference, not an account connection.' : 'It’ll be here when you come back.'}</p><form key={editingItem?.id || `new-${dialog}`} onSubmit={add}><label>{dialog === 'connection' ? 'Channel or platform name' : 'What would you like to remember?'}<input name="title" maxLength={200} required autoFocus defaultValue={editingItem?.title || ''} placeholder={dialog === 'connection' ? 'Twitch · its_kickaa' : 'Give it a short, familiar name'}/></label><label>{dialog === 'connection' ? 'Channel URL or details' : 'A little more detail (optional)'}<textarea name="note" maxLength={2000} rows={3} defaultValue={editingItem?.note || ''} placeholder={dialog === 'connection' ? 'https://twitch.tv/its_kickaa' : 'Anything that will help future you…'}/></label>{['reminder', 'idea'].includes(dialog) && <label className="hex-colour-field">Card colour<div><input type="color" aria-label="Choose card colour" value={/^#[0-9A-Fa-f]{6}$/.test(itemColour) ? itemColour : '#A679C4'} onChange={event => setItemColour(event.target.value.toUpperCase())}/><input aria-label="Card colour hex value" value={itemColour} maxLength={7} pattern="#[0-9A-Fa-f]{6}" onChange={event => setItemColour(event.target.value.toUpperCase())} placeholder="#A679C4"/></div><small>Choose visually or enter a six-digit hex colour.</small></label>}{dialog === 'reminder' && <div className="modal-field-row"><label>Priority<select name="priority" defaultValue={editingItem?.priority || 'medium'}><option value="low">Low — gentle</option><option value="medium">Medium — keep nearby</option><option value="high">High — important</option></select></label><label>When? (optional)<input name="due" type="date" defaultValue={editingItem?.due ? new Date(editingItem.due).toISOString().slice(0, 10) : ''}/></label></div>}{dialog === 'checklist' && <label>Checklist<select name="checklistPhase" defaultValue={editingItem?.checklistPhase || checklistPhase}><option value="pre">Pre-Stream Checklist</option><option value="post">Post Stream Checklist</option></select></label>}<div className="modal-actions"><button type="button" className="outline" disabled={busy} onClick={() => setDialog(null)}>Cancel</button><button className="primary" disabled={busy}>{busy ? 'Saving…' : editingItem ? 'Save changes' : 'Save it for me'}<Check size={16}/></button></div>{error && <p className="form-error" role="alert">{error}</p>}</form></section></div>}
