@@ -1,9 +1,10 @@
 'use client';
-import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
-import { House, Bell, ClipboardCheck, Lightbulb, Link2, Users, UserPlus, Plus, ArrowUpRight, ChevronRight, Check, Clock, Trash2, Pencil, Grid2X2, List, X, ChevronDown, ShieldCheck, Leaf, Menu, RotateCcw, Heart, Sparkles, Radio, Hash, Moon, Sun, Settings, BarChart3, LayoutDashboard, CalendarDays, MessageSquareText, LogOut, LockKeyhole, Accessibility, Type, Contrast, GripVertical, ArrowUp, ArrowDown } from 'lucide-react';
+import { useEffect, useState, type CSSProperties, type FormEvent, type MouseEvent } from 'react';
+import { House, Bell, ClipboardCheck, Lightbulb, Link2, Users, UserPlus, Plus, ArrowUpRight, ChevronRight, Check, Clock, Trash2, Pencil, Grid2X2, List, X, ChevronDown, ShieldCheck, Leaf, Menu, RotateCcw, Heart, Sparkles, Radio, Hash, Moon, Sun, Settings, BarChart3, LayoutDashboard, CalendarDays, MessageSquareText, LogOut, LockKeyhole, Accessibility, Type, Contrast, GripVertical, ArrowUp, ArrowDown, ExternalLink } from 'lucide-react';
 import DiscordSetup from './discord-setup';
 import MyCrew, { streamDetails } from './my-crew';
 import StreamGameArt from './stream-game-art';
+import { dashboardPaths, dashboardViewFromPath, type DashboardView as View } from '@/lib/dashboard-sections';
 import { createClient } from '@/lib/supabase/client';
 type Item = {
     id: string;
@@ -59,7 +60,6 @@ type GoogleConnection = {
         handle?: string;
     };
 };
-type View = 'Home' | 'Reminders' | 'My Stream' | 'Idea pocket' | 'Connections' | 'My Crew' | 'Discord setup' | 'Account settings';
 type SettingsTab = 'account' | 'accessibility';
 const DEFAULT_TEXT_SIZE = 100;
 const LEGACY_LARGE_TEXT_SIZE = 120;
@@ -107,6 +107,7 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     isDeveloper?: boolean;
     isTester?: boolean;
 }) {
+    const [popout, setPopout] = useState(false);
     const [visualSettingsOpen, setVisualSettingsOpen] = useState(false);
     const [streamVisuals, setStreamVisuals] = useState(DEFAULT_STREAM_VISUALS);
     const streamVisualsKey = 'beipi-stream-visuals:' + accountId;
@@ -165,11 +166,29 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     }
     useEffect(() => { const savedTheme = window.localStorage.getItem('beipi-theme'); if (savedTheme)
         setDark(savedTheme === 'dark'); setTextSize(getSavedTextSize(window.localStorage)); setHighContrast(window.localStorage.getItem('beipi-a11y-high-contrast') === 'true'); setUnderlineLinks(window.localStorage.getItem('beipi-a11y-underline-links') === 'true'); const savedMotion = window.localStorage.getItem('beipi-a11y-reduced-motion'); setReducedMotion(savedMotion === null ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : savedMotion === 'true'); const reminderLayout = window.localStorage.getItem('beipi-reminder-layout'), ideaLayout = window.localStorage.getItem('beipi-idea-layout'), savedChecklistLayout = window.localStorage.getItem('beipi-checklist-layout'); setListLayout({ Reminders: reminderLayout === 'grid' ? 'grid' : 'list', 'Idea pocket': ideaLayout === 'list' ? 'list' : 'grid' }); setChecklistLayout(savedChecklistLayout === 'grid' ? 'grid' : 'list'); setPreferencesLoaded(true); }, []);
-    useEffect(() => { if (!isTester)
-        return; const crewSpace = new URLSearchParams(window.location.search).get('crewSpace') || ''; if (crewSpace) {
-        setInitialCrewSpace(crewSpace);
-        setView('My Crew');
-    } }, [isTester]);
+    useEffect(() => {
+        function restoreDashboardLocation() {
+            const params = new URLSearchParams(window.location.search);
+            const crewSpace = params.get('crewSpace') || '';
+            const destination = dashboardViewFromPath(window.location.pathname) || 'Home';
+            setPopout(params.get('popout') === '1');
+            setInitialCrewSpace(isTester ? crewSpace : '');
+            setCrewInviteOpen(false);
+            setMenu(false);
+            setFilter('open');
+            if (!isTester && destination !== 'Home' && destination !== 'Account settings') {
+                window.location.replace('/tester');
+                return;
+            }
+            setView(isTester && crewSpace && destination === 'Home' ? 'My Crew' : destination);
+            const tab = params.get('stream');
+            setStreamTab(tab === 'checklist' || tab === 'schedule' || tab === 'analytics' ? tab : 'overview');
+        }
+
+        restoreDashboardLocation();
+        window.addEventListener('popstate', restoreDashboardLocation);
+        return () => window.removeEventListener('popstate', restoreDashboardLocation);
+    }, [isTester]);
     useEffect(() => { if (!preferencesLoaded)
         return; window.localStorage.setItem('beipi-theme', dark ? 'dark' : 'light'); window.localStorage.setItem('beipi-a11y-high-contrast', String(highContrast)); window.localStorage.setItem('beipi-a11y-reduced-motion', String(reducedMotion)); window.localStorage.setItem('beipi-a11y-underline-links', String(underlineLinks)); }, [preferencesLoaded, dark, highContrast, reducedMotion, underlineLinks]);
     useEffect(() => {
@@ -330,13 +349,41 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     finally {
         setUsernameBusy(false);
     } }
-    const change = (name: View) => { if (!isTester && !['Home', 'Account settings'].includes(name)) {
-        window.location.assign('/tester');
-        return;
-    } if (name === view)
-        return; if (view === 'Discord setup' && discordDirty && !confirm('Leave your unsaved Discord draft?'))
-        return; setView(name); setCrewInviteOpen(false); setFilter('open'); setMenu(false); };
-    const openMyStream = (tab: StreamTab) => { setStreamTab(tab); change('My Stream'); };
+    function dashboardUrl(name: View, tab: StreamTab, inPopout: boolean) {
+        const params = new URLSearchParams();
+        if (inPopout) params.set('popout', '1');
+        if (name === 'My Stream' && tab !== 'overview') params.set('stream', tab);
+        if (name === 'My Crew' && initialCrewSpace) params.set('crewSpace', initialCrewSpace);
+        return dashboardPaths[name] + (params.size ? '?' + params.toString() : '');
+    }
+
+    function change(name: View, tab = streamTab) {
+        if (!isTester && name !== 'Home' && name !== 'Account settings') {
+            window.location.assign('/tester');
+            return;
+        }
+        if (name !== view && view === 'Discord setup' && discordDirty && !confirm('Leave your unsaved Discord draft?')) return;
+        const url = dashboardUrl(name, tab, popout);
+        if (window.location.pathname + window.location.search !== url) window.history.pushState(null, '', url);
+        if (name !== view) setFilter('open');
+        setView(name);
+        if (name === 'My Stream') setStreamTab(tab);
+        setCrewInviteOpen(false);
+        setMenu(false);
+    }
+
+    const openMyStream = (tab: StreamTab) => change('My Stream', tab);
+    const popoutUrl = dashboardUrl(view, streamTab, true);
+
+    function openDashboardWindow(event: MouseEvent<HTMLAnchorElement>) {
+        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+        const popup = window.open('', '_blank', 'popup,width=1050,height=780');
+        if (!popup) return;
+        event.preventDefault();
+        popup.opener = null;
+        popup.location.replace(event.currentTarget.href);
+    }
+
     function rows(list: Item[], compact = false, layout: 'list' | 'grid' = 'list', reorderKind: 'checklist' | 'reminder' | null = null) {
         return <div className={'rows ' + (compact ? 'compact ' : '') + (layout === 'grid' ? 'grid-view' : 'list-view')}>
             {list.map((item, index) => <article draggable={Boolean(reorderKind)} onDragStart={() => setDraggedItemId(item.id)} onDragEnd={() => setDraggedItemId('')} onDragOver={event => { if (reorderKind) event.preventDefault(); }} onDrop={() => { if (reorderKind) void reorderItems(draggedItemId, item.id, reorderKind); }} className={'item ' + (reorderKind ? 'movable-item ' : '') + (['reminder', 'idea'].includes(item.kind) ? 'custom-colour ' : '') + (item.kind === 'reminder' ? `priority-${item.priority || 'medium'} ` : item.kind === 'idea' ? 'idea-colour ' : '') + (draggedItemId === item.id ? 'dragging ' : '') + (item.done ? 'completed' : '')} style={['reminder', 'idea'].includes(item.kind) ? {'--item-accent': item.colorHex || (item.kind === 'idea' ? '#E4B85A' : '#A679C4')} as CSSProperties : undefined} key={item.id}>
@@ -348,9 +395,9 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
         </div>;
     }
     function empty(kind: string) { return <div className="empty"><div className="empty-icon">{kind === 'checklist' ? <ClipboardCheck /> : kind === 'idea' ? <Lightbulb /> : <Leaf />}</div><h3>{kind === 'checklist' ? 'Your routine, your way.' : kind === 'idea' ? 'A home for your next good idea.' : 'A little space to breathe.'}</h3><p>{kind === 'checklist' ? 'Save the things you like to check before going live.' : kind === 'idea' ? 'Stream ideas, games to try, little thoughts worth keeping.' : 'Nothing waiting here. Add a note whenever you need one.'}</p>{kind === 'checklist' ? <button className="primary" disabled={busy} onClick={() => void template()}>Use a starter checklist <Plus size={16}/></button> : <button className="outline" onClick={() => openNewItem(kind)}>Add your first {kind === 'idea' ? 'idea' : 'reminder'} <Plus size={16}/></button>}</div>; }
-    return <div className={'shell ' + (focus ? 'focus-mode ' : '') + (dark ? 'dark-theme ' : 'light-theme ') + (textSize > DEFAULT_TEXT_SIZE ? 'text-large ' : '') + (highContrast ? 'high-contrast ' : '') + (reducedMotion ? 'reduce-motion ' : '') + (underlineLinks ? 'underline-links' : '')} style={{ '--dashboard-text-scale': textSize / DEFAULT_TEXT_SIZE } as CSSProperties}>
- <aside id="dashboard-navigation" className={menu ? 'sidebar visible' : 'sidebar'}><a href="/" className="brand"><span className="brand-mark">B<span>•</span></span><div>B.E.I.P.I<small>Your streaming companion</small></div></a><div className="workspace"><div className="workspace-icon">{identityName.slice(0, 1).toUpperCase()}</div><div><strong>{identityName}</strong><small>{isTester ? 'Your private dashboard' : 'Dashboard preview'}</small></div><ShieldCheck size={16}/></div><div className="nav-label">YOUR SPACE</div><nav aria-label="Dashboard sections">{navigation.map(({ name, icon: Icon }) => { const locked = !isTester && name !== 'Home', count = name === 'Reminders' ? reminders.length : name === 'Idea pocket' ? open.filter(item => item.kind === 'idea').length : 0; return <button key={name} className={(view === name ? 'active ' : '') + (locked ? 'nav-locked' : '')} onClick={() => change(name)} aria-current={view === name ? 'page' : undefined} aria-label={locked ? `${name} — beta access required` : name}><Icon size={19}/>{name}{locked ? <LockKeyhole className="nav-lock" size={14}/> : count > 0 && <span className="count">{count}</span>}</button>; })}</nav><div className="sidebar-note"><Heart size={17}/><p>Less to remember.<br /><strong>More room to be you.</strong></p></div><button className={'profile ' + (view === 'Account settings' ? 'active' : '')} onClick={() => change('Account settings')} aria-current={view === 'Account settings' ? 'page' : undefined}><div className="avatar">{identityName.slice(0, 1).toUpperCase()}</div><div><strong>{identityName}</strong><small>Account settings</small></div><Settings size={15}/></button></aside>
- <div className="body"><header className="topbar"><div className="crumb"><button className="mobile-menu" aria-label={menu ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menu} aria-controls="dashboard-navigation" onClick={() => setMenu(!menu)}><Menu size={22}/></button><span>Your companion</span><ChevronRight size={14}/><strong>{view}</strong></div><div className="topbar-actions"><button className="quiet theme-toggle" onClick={() => setDark(!dark)} aria-pressed={!dark} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>{dark ? <Sun size={15}/> : <Moon size={15}/>}<span>{dark ? 'Light mode' : 'Dark mode'}</span></button><button className={'quiet ' + (focus ? 'selected' : '')} onClick={() => setFocus(!focus)} aria-pressed={focus}><Leaf size={15}/>{focus ? 'Show everything' : 'Focus view'}</button></div></header>
+    return <div className={'shell ' + (popout ? 'dashboard-popout ' : '') + (focus ? 'focus-mode ' : '') + (dark ? 'dark-theme ' : 'light-theme ') + (textSize > DEFAULT_TEXT_SIZE ? 'text-large ' : '') + (highContrast ? 'high-contrast ' : '') + (reducedMotion ? 'reduce-motion ' : '') + (underlineLinks ? 'underline-links' : '')} style={{ '--dashboard-text-scale': textSize / DEFAULT_TEXT_SIZE } as CSSProperties}>
+ <aside id="dashboard-navigation" className={menu ? 'sidebar visible' : 'sidebar'}><a href="/" className="brand"><span className="brand-mark">B<span>•</span></span><div>B.E.I.P.I<small>Your streaming companion</small></div></a><div className="workspace"><div className="workspace-icon">{identityName.slice(0, 1).toUpperCase()}</div><div><strong>{identityName}</strong><small>{isTester ? 'Your private dashboard' : 'Dashboard preview'}</small></div><ShieldCheck size={16}/></div><div className="nav-label">YOUR SPACE</div><nav aria-label="Dashboard sections">{navigation.map(({ name, icon: Icon }) => { const locked = !isTester && name !== 'Home', count = name === 'Reminders' ? reminders.length : name === 'Idea pocket' ? open.filter(item => item.kind === 'idea').length : 0; return <button key={name} className={(view === name ? 'active ' : '') + (locked ? 'nav-locked' : '')} onClick={() => change(name)} aria-current={view === name ? 'page' : undefined} aria-label={locked ? `${name} — beta access required` : name} title={popout ? name : undefined}><Icon size={19}/><span className="dashboard-nav-text">{name}</span>{locked ? <LockKeyhole className="nav-lock" size={14}/> : count > 0 && <span className="count">{count}</span>}</button>; })}</nav><div className="sidebar-note"><Heart size={17}/><p>Less to remember.<br /><strong>More room to be you.</strong></p></div><button className={'profile ' + (view === 'Account settings' ? 'active' : '')} aria-label={popout ? 'Account settings' : undefined} title={popout ? 'Account settings' : undefined} onClick={() => change('Account settings')} aria-current={view === 'Account settings' ? 'page' : undefined}><div className="avatar">{identityName.slice(0, 1).toUpperCase()}</div><div><strong>{identityName}</strong><small>Account settings</small></div><Settings size={15}/></button></aside>
+ <div className="body"><header className="topbar"><div className="crumb"><button className="mobile-menu" aria-label={menu ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menu} aria-controls="dashboard-navigation" onClick={() => setMenu(!menu)}><Menu size={22}/></button><span>Your companion</span><ChevronRight size={14}/><strong>{view}</strong></div><div className="topbar-actions">{!popout && <a className="quiet dashboard-popout-link" href={popoutUrl} target="_blank" rel="noopener" aria-label="Open dashboard in a new window" title="Open dashboard in a new window" onClick={openDashboardWindow}><ExternalLink size={15}/><span>Pop out</span></a>}<button className="quiet theme-toggle" onClick={() => setDark(!dark)} aria-pressed={!dark} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>{dark ? <Sun size={15}/> : <Moon size={15}/>}<span>{dark ? 'Light mode' : 'Dark mode'}</span></button><button className={'quiet ' + (focus ? 'selected' : '')} onClick={() => setFocus(!focus)} aria-pressed={focus}><Leaf size={15}/>{focus ? 'Show everything' : 'Focus view'}</button></div></header>
 <main><div className="page-heading"><div>{view === 'Reminders' && <div className="eyebrow">A LITTLE LESS TO HOLD IN YOUR HEAD</div>}<h1>{view === 'Home' ? `Welcome, ${identityName}.` : view}</h1><p>{view === 'Home' ? (isTester ? 'Pick up where you left off. One little thing at a time.' : 'Take a look around while your beta access is locked.') : view === 'Reminders' ? 'A gentle place for the things you want to remember.' : view === 'My Stream' ? 'Plan, prepare and understand your streams in one place.' : view === 'Idea pocket' ? 'Put it here before it disappears.' : view === 'Discord setup' ? 'Your banners, messages and reaction roles. One step at a time.' : view === 'Connections' ? 'Your streaming platforms, together in one place.' : view === 'Account settings' ? 'Your profile, security and accessibility preferences in one place.' : 'A little support from the people you trust.'}</p></div>{isTester && view === 'My Crew' && <button className="primary" onClick={() => setCrewInviteOpen(true)}><UserPlus size={17}/> Give / Revoke access to My Crew</button>}{isTester && (['Reminders', 'Idea pocket', 'Connections'].includes(view) || (view === 'My Stream' && streamTab === 'checklist')) && <button className="primary" onClick={() => openNewItem(kinds[view] ?? 'reminder')}><Plus size={17}/>{view === 'Idea pocket' ? 'Save an idea' : view === 'My Stream' ? 'Add a step' : view === 'Connections' ? 'Save a channel' : 'Add a reminder'}</button>}</div>
  {error && <div className="error" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss error"><X size={16}/></button></div>}
  {loading ? <div className="loading">B.E.I.P.I is finding your place…</div> : <>
@@ -365,10 +412,10 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
                     { id: 'checklist' as const, label: 'Checklist', description: 'Get ready without holding it all in your head.', icon: <ClipboardCheck size={22}/>, tone: 'mint' },
                     { id: 'schedule' as const, label: 'Schedule', description: 'Plan streams and choose when Pip checks in.', icon: <CalendarDays size={22}/>, tone: 'lavender' },
                     { id: 'analytics' as const, label: 'Analytics', description: 'Clear insights from connected platforms.', icon: <BarChart3 size={22}/>, tone: 'gold' }
-                ].map(item => <button key={item.id} className={'card discord-section-button ' + (streamTab === item.id ? 'active' : '')} aria-expanded={streamTab === item.id} onClick={() => setStreamTab(item.id)}><span className={'stat-icon ' + item.tone}>{item.icon}</span><span><strong>{item.label}</strong><small>{item.description}</small></span><ChevronRight size={19}/></button>)}</nav>
- {streamTab === 'overview' && <><div className="stream-overview-grid"><section className="card stream-summary"><span className="stat-icon mint"><ClipboardCheck size={21}/></span><div><small>STREAM READINESS</small><h2>{readinessPercent}% ready</h2><p>{preChecked} of {preChecklist.length} pre-stream steps complete.</p><button className="text-button" onClick={() => setStreamTab('checklist')}>Open checklist <ArrowUpRight size={15}/></button></div>
+                ].map(item => <button key={item.id} className={'card discord-section-button ' + (streamTab === item.id ? 'active' : '')} aria-expanded={streamTab === item.id} onClick={() => openMyStream(item.id)}><span className={'stat-icon ' + item.tone}>{item.icon}</span><span><strong>{item.label}</strong><small>{item.description}</small></span><ChevronRight size={19}/></button>)}</nav>
+ {streamTab === 'overview' && <><div className="stream-overview-grid"><section className="card stream-summary"><span className="stat-icon mint"><ClipboardCheck size={21}/></span><div><small>STREAM READINESS</small><h2>{readinessPercent}% ready</h2><p>{preChecked} of {preChecklist.length} pre-stream steps complete.</p><button className="text-button" onClick={() => openMyStream('checklist')}>Open checklist <ArrowUpRight size={15}/></button></div>
     {streamVisuals.readinessPie && <span className="stream-readiness-pie" aria-hidden="true" style={{ '--readiness': readinessPercent + '%' } as CSSProperties}/>}
-    </section><section className="card stream-summary"><span className="stat-icon lavender"><CalendarDays size={21}/></span><div><small>NEXT STREAM</small><h2>{nextStream ? new Date(nextStream.due!).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Nothing booked yet'}</h2><p>{nextStream ? `${new Date(nextStream.due!).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · ${nextStream.title}` : 'Add your next stream when you are ready.'}</p>{streamVisuals.gameArt && nextGame && <p className="stream-game-name">{nextGame}</p>}<button className="text-button" onClick={() => setStreamTab('schedule')}>{nextStream ? 'Open schedule' : 'Add a stream'} <ArrowUpRight size={15}/></button></div>
+    </section><section className="card stream-summary"><span className="stat-icon lavender"><CalendarDays size={21}/></span><div><small>NEXT STREAM</small><h2>{nextStream ? new Date(nextStream.due!).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }) : 'Nothing booked yet'}</h2><p>{nextStream ? `${new Date(nextStream.due!).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · ${nextStream.title}` : 'Add your next stream when you are ready.'}</p>{streamVisuals.gameArt && nextGame && <p className="stream-game-name">{nextGame}</p>}<button className="text-button" onClick={() => openMyStream('schedule')}>{nextStream ? 'Open schedule' : 'Add a stream'} <ArrowUpRight size={15}/></button></div>
     {streamVisuals.gameArt && nextGame && <StreamGameArt key={nextGame} game={nextGame}/>}
     </section></div><section className="card analytics-preview"><div><span className="eyebrow">YOUR STREAMING HOME</span><h2>Everything you need before you go live.</h2><p>Use your checklist, plan your next stream and keep the little details together in one calm space.</p></div><BeipiWriting /></section></>}
  {streamTab === 'checklist' && <section className="card full checklist-library">

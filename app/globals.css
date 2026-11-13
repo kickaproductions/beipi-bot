@@ -1007,3 +1007,18 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .twitch-game-field li:hover,.twitch-game-field li[aria-selected=true]{background:var(--light);outline:1px solid var(--purple)}
 .twitch-game-field li img{flex:none;border-radius:3px}
 .twitch-game-field small{color:var(--muted)}
+
+.dashboard-popout-link{flex-shrink:0}
+.shell.dashboard-popout .sidebar{overflow-y:auto}
+@media(max-width:850px){
+  .shell.dashboard-popout .sidebar{display:flex;top:0;width:58px;padding:12px 6px;overflow-x:hidden;box-shadow:none}
+  .shell.dashboard-popout .body{margin-left:58px;width:calc(100% - 58px);min-width:0}
+  .dashboard-popout .sidebar .brand,.dashboard-popout .sidebar .profile,.dashboard-popout .sidebar nav button{justify-content:center;padding-inline:4px}
+  .dashboard-popout .sidebar .brand>div,.dashboard-popout .sidebar .profile>div:not(.avatar),.dashboard-popout .sidebar .profile>svg,.dashboard-popout .sidebar .nav-label,.dashboard-popout .sidebar :is(.dashboard-nav-text,.count,.nav-lock),.dashboard-popout .mobile-menu{display:none}
+  .dashboard-popout .sidebar nav{margin-top:16px}
+  .dashboard-popout .sidebar .profile{margin-top:auto}
+}
+@media(max-width:650px){
+  .dashboard-popout-link span{display:none}
+  .dashboard-popout .topbar{height:auto;min-height:65px;flex-wrap:wrap;gap:8px;padding:10px 14px}
+}
