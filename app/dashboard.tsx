@@ -98,6 +98,7 @@ const futurePlatforms = [
     { name: 'Facebook', className: 'facebook', mark: <span>f</span>, copy: 'Keep Facebook streams visible alongside your other channels.', note: 'Platform access to be reviewed' },
     { name: 'Custom RTMP', className: 'rtmp', mark: <Radio size={23}/>, copy: 'Save another streaming destination or custom broadcast endpoint.', note: 'Manual setup planned' }
 ];
+const COMPLETION_MESSAGE = 'One less thing to remember. Nice work!';
 const DEFAULT_STREAM_VISUALS = { readinessPie: false, gameArt: false };
 
 export default function Dashboard({ accountId = '', userName = 'Creator', initialUsername = '', isDeveloper = false, isTester = false }: {
@@ -108,6 +109,7 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     isTester?: boolean;
 }) {
     const [popout, setPopout] = useState(false);
+    const [completionCount, setCompletionCount] = useState(0);
     const [visualSettingsOpen, setVisualSettingsOpen] = useState(false);
     const [streamVisuals, setStreamVisuals] = useState(DEFAULT_STREAM_VISUALS);
     const streamVisualsKey = 'beipi-stream-visuals:' + accountId;
@@ -229,7 +231,7 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
         setError('Google connection is not configured yet.'); if (result === 'error' || result === 'invalid-state')
         setError('Google could not be connected. Please try again.'); }, [isTester]);
     useEffect(() => { if (!toast)
-        return; const id = setTimeout(() => setToast(''), 4000); return () => clearTimeout(id); }, [toast]);
+        return; const id = setTimeout(() => setToast(''), 4000); return () => clearTimeout(id); }, [toast, completionCount]);
     useEffect(() => { if (!dialog) {
         setEditingItem(null);
         return;
@@ -279,8 +281,16 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
         setEditingItem(null);
         setToast(editingItem ? 'Updated. Pip has kept everything tidy.' : 'Saved. You don’t have to hold that thought anymore.');
     } }
-    async function toggle(item: Item) { if (await request('PATCH', { id: item.id, done: !item.done }))
-        setToast(item.done ? 'Back on your list.' : 'One less thing to remember. Nice work!'); }
+    async function toggle(item: Item) {
+        if (!await request('PATCH', { id: item.id, done: !item.done })) return;
+
+        if (!item.done && (item.kind === 'reminder' || item.kind === 'checklist')) {
+            setCompletionCount(count => count + 1);
+            setToast(COMPLETION_MESSAGE);
+        } else {
+            setToast(item.done ? 'Back on your list.' : 'Marked as done.');
+        }
+    }
     async function template() { const starter = checklistPhase === 'pre' ? ['Check microphone and game audio', 'Update stream title and category', 'Get water and take a breath'] : ['Save or review your stream recording', 'Note clips and highlights to revisit', 'Thank your community and moderators']; for (const [index, title] of starter.entries())
         if (!await request('POST', { kind: 'checklist', title, checklistPhase, sortOrder: activeChecklist.length + index, createdByPip: true }))
             return; setToast(`Pip saved your ${checklistPhase === 'pre' ? 'pre-stream' : 'post-stream'} starter checklist. You can edit every step.`); }
@@ -472,7 +482,12 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
  {view === 'Account settings' && settingsTab === 'accessibility' && <aside className="accessibility-contact card"><MessageSquareText size={20}/><div><strong>Is there something we could add?</strong><p>Accessibility needs are personal, and we want to keep learning. Tell us what would make B.E.I.P.I. easier for you at <a href="mailto:kickaa@beipi.app">kickaa@beipi.app</a>.</p></div></aside>}
  </>}
  <footer><span><Heart size={13}/> Made for brains with a few extra tabs open.</span><span>B.E.I.P.I · The streamer’s companion</span></footer>
- </main></div>{toast && <div className="toast" role="status"><Check size={17}/>{toast}</div>}
+ </main></div>{toast && <div className="toast" role="status">
+    {toast === COMPLETION_MESSAGE
+        ? <span key={completionCount} className="completion-tick" aria-hidden="true"><Check size={18} strokeWidth={3}/></span>
+        : <Check size={17} aria-hidden="true"/>}
+    {toast}
+ </div>}
  {dialog && <div className="modal-backdrop" onClick={event => { if (event.target === event.currentTarget && !busy) setDialog(null); }}><section className="modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title"><button className="close" aria-label="Close dialog" disabled={busy} onClick={() => setDialog(null)}><X size={20}/></button><span className="stat-icon lavender">{editingItem ? <Pencil size={21}/> : <Plus size={23}/>}</span><h2 id="dialog-title">{editingItem ? `Edit ${dialog === 'idea' ? 'idea' : dialog === 'reminder' ? 'reminder' : 'entry'}.` : dialog === 'idea' ? 'Keep that thought.' : dialog === 'checklist' ? 'One little step.' : dialog === 'connection' ? 'Save a channel reference.' : 'Let’s remember this.'}</h2><p>{editingItem ? 'Change anything you need, then save it again.' : dialog === 'connection' ? 'This saves a reference, not an account connection.' : 'It’ll be here when you come back.'}</p><form key={editingItem?.id || `new-${dialog}`} onSubmit={add}><label>{dialog === 'connection' ? 'Channel or platform name' : 'What would you like to remember?'}<input name="title" maxLength={200} required autoFocus defaultValue={editingItem?.title || ''} placeholder={dialog === 'connection' ? 'Twitch · its_kickaa' : 'Give it a short, familiar name'}/></label><label>{dialog === 'connection' ? 'Channel URL or details' : 'A little more detail (optional)'}<textarea name="note" maxLength={2000} rows={3} defaultValue={editingItem?.note || ''} placeholder={dialog === 'connection' ? 'https://twitch.tv/its_kickaa' : 'Anything that will help future you…'}/></label>{['reminder', 'idea'].includes(dialog) && <label className="hex-colour-field">Card colour<div><input type="color" aria-label="Choose card colour" value={/^#[0-9A-Fa-f]{6}$/.test(itemColour) ? itemColour : '#A679C4'} onChange={event => setItemColour(event.target.value.toUpperCase())}/><input aria-label="Card colour hex value" value={itemColour} maxLength={7} pattern="#[0-9A-Fa-f]{6}" onChange={event => setItemColour(event.target.value.toUpperCase())} placeholder="#A679C4"/></div><small>Choose visually or enter a six-digit hex colour.</small></label>}{dialog === 'reminder' && <div className="modal-field-row"><label>Priority<select name="priority" defaultValue={editingItem?.priority || 'medium'}><option value="low">Low — gentle</option><option value="medium">Medium — keep nearby</option><option value="high">High — important</option></select></label><label>When? (optional)<input name="due" type="date" defaultValue={editingItem?.due ? new Date(editingItem.due).toISOString().slice(0, 10) : ''}/></label></div>}{dialog === 'checklist' && <label>Checklist<select name="checklistPhase" defaultValue={editingItem?.checklistPhase || checklistPhase}><option value="pre">Pre-Stream Checklist</option><option value="post">Post Stream Checklist</option></select></label>}<div className="modal-actions"><button type="button" className="outline" disabled={busy} onClick={() => setDialog(null)}>Cancel</button><button className="primary" disabled={busy}>{busy ? 'Saving…' : editingItem ? 'Save changes' : 'Save it for me'}<Check size={16}/></button></div>{error && <p className="form-error" role="alert">{error}</p>}</form></section></div>}
  </div>;
 }

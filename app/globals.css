@@ -1022,3 +1022,21 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
   .dashboard-popout-link span{display:none}
   .dashboard-popout .topbar{height:auto;min-height:65px;flex-wrap:wrap;gap:8px;padding:10px 14px}
 }
+
+.completion-tick{
+  display:grid;
+  place-items:center;
+  flex:0 0 28px;
+  height:28px;
+  border-radius:50%;
+  background:#b7efc8;
+  color:#17442b;
+}
+@media(prefers-reduced-motion:no-preference){
+  .shell:not(.reduce-motion) .completion-tick{animation:completion-tick-pop .42s ease-out}
+}
+@keyframes completion-tick-pop{
+  0%{transform:scale(.6);opacity:.35}
+  65%{transform:scale(1.16);opacity:1}
+  100%{transform:scale(1)}
+}
