@@ -13,7 +13,8 @@ type DiscordChannel={id:string;name:string};
 type DiscordRole={id:string;name:string;color:number};
 function InlinePreview({text}:{text:string}){const pieces=[];let cursor=0,key=0;while(cursor<text.length){const rest=text.slice(cursor);let match:RegExpMatchArray|null=null;let kind='';const patterns:[string,RegExp][]=[['bold-italic',/^\*\*\*(.+?)\*\*\*/],['bold',/^\*\*(.+?)\*\*/],['underline',/^__(.+?)__/],['italic',/^\*(.+?)\*/]];for(const [type,pattern] of patterns){const found=rest.match(pattern);if(found){match=found;kind=type;break}}if(match){const content=<InlinePreview text={match[1]}/>,item=kind==='bold-italic'?<strong key={key++}><em>{content}</em></strong>:kind==='bold'?<strong key={key++}>{content}</strong>:kind==='underline'?<u key={key++}>{content}</u>:<em key={key++}>{content}</em>;pieces.push(item);cursor+=match[0].length;continue}const nextMarkers=[rest.indexOf('***',1),rest.indexOf('**',1),rest.indexOf('__',1),rest.indexOf('*',1)].filter(position=>position>0);const length=nextMarkers.length?Math.min(...nextMarkers):rest.length;pieces.push(rest.slice(0,length));cursor+=length}return <>{pieces}</>}
 function TextPreview({text}:{text:string}){return <div className="message-copy">{text.split('\n').map((line,i)=>line.startsWith('# ')?<h3 key={i}><InlinePreview text={line.slice(2)}/></h3>:<div key={i}>{line?<InlinePreview text={line}/>:<br/>}</div>)}</div>}
-export default function DiscordSetup({onDirty}:{onDirty:(dirty:boolean)=>void}){
+type DiscordSection = 'live' | 'reaction' | 'channel';
+export default function DiscordSetup({onDirty,popout}:{onDirty:(dirty:boolean)=>void;popout:boolean}){
  const [drafts,setDrafts]=useState<SavedDraft[]>([]),[loading,setLoading]=useState(true),[draft,setDraft]=useState<DraftPayload|null>(null),[id,setId]=useState<string|null>(null),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[error,setError]=useState(''),[toast,setToast]=useState(''),[section,setSection]=useState<'live'|'reaction'|'channel'>('live'),[liveOpen,setLiveOpen]=useState(false),[tab,setTab]=useState<'all'|'channel'|'reaction'>('all');
  const [guilds,setGuilds]=useState<DiscordGuild[]>([]),[channels,setChannels]=useState<DiscordChannel[]>([]),[channelsLoading,setChannelsLoading]=useState(false),[channelError,setChannelError]=useState('');
  const [roles,setRoles]=useState<DiscordRole[]>([]),[rolesLoading,setRolesLoading]=useState(false),[roleError,setRoleError]=useState(''),[newRoleName,setNewRoleName]=useState(''),[creatingRole,setCreatingRole]=useState(false),[roleEmojiIndex,setRoleEmojiIndex]=useState<number|null>(null);
@@ -25,6 +26,26 @@ export default function DiscordSetup({onDirty}:{onDirty:(dirty:boolean)=>void}){
  useEffect(()=>{onDirty(dirty);return()=>onDirty(false)},[dirty,onDirty]);
  useEffect(()=>{if(!dirty)return;const handler=(event:BeforeUnloadEvent)=>event.preventDefault();window.addEventListener('beforeunload',handler);return()=>window.removeEventListener('beforeunload',handler)},[dirty]);
  useEffect(()=>{if(!toast)return;const timer=setTimeout(()=>setToast(''),4000);return()=>clearTimeout(timer)},[toast]);
+ function selectSection(next: DiscordSection, showLive: boolean) {
+  setSection(next);
+  setLiveOpen(showLive);
+  setTab(next === 'live' ? 'all' : next);
+ }
+ useEffect(() => {
+  function restoreSection() {
+   const section = new URLSearchParams(window.location.search).get('section');
+   selectSection(section === 'reaction' || section === 'channel' ? section : 'live', section === 'live');
+  }
+  restoreSection();
+  window.addEventListener('popstate', restoreSection);
+  return () => window.removeEventListener('popstate', restoreSection);
+ }, []);
+ function sectionUrl(next: DiscordSection | null) {
+  const params = new URLSearchParams();
+  if (next) params.set('section', next);
+  if (popout) params.set('popout', '1');
+  return '/discord-setup' + (params.size ? '?' + params.toString() : '');
+ }
  function update(values:Partial<DraftPayload>){setDraft(old=>old?{...old,...values}:null);setDirty(true);setError('')}
  function open(type:'channel'|'reaction',saved?:SavedDraft){if(!saved&&drafts.length>=5){setError('You can keep up to five drafts. Delete one before starting another.');return}if(dirty&&!confirm('Leave your unsaved changes?'))return;const next=saved?structuredClone(saved.payload):fresh(type);if(next.type==='reaction'&&!next.text.trim())next.text=REACTION_MESSAGE;if(!next.serverId){const match=guilds.find(g=>g.name===next.server);if(match)next.serverId=match.id}setSection(type);setDraft(next);setId(saved?.id??null);setDirty(false);setError('')}
  function close(){if(dirty&&!confirm('Leave your unsaved changes?'))return;setDraft(null);setId(null);setDirty(false);setError('')}
@@ -42,7 +63,17 @@ export default function DiscordSetup({onDirty}:{onDirty:(dirty:boolean)=>void}){
   {id:'live' as const,label:'Live notifications',description:'Your alerts and Streamer role alerts.',icon:<Bell size={22}/>,tone:'gold'},
   {id:'reaction' as const,label:'Reaction roles',description:'Self-serve roles for your members.',icon:<Smile size={22}/>,tone:'mint'},
   {id:'channel' as const,label:'Channels',description:'Channels, banners and messages.',icon:<Hash size={22}/>,tone:'lavender'}
- ].map(item=><button key={item.id} className={'card discord-section-button '+(section===item.id&&(item.id!=='live'||liveOpen)?'active':'')} aria-expanded={section===item.id&&(item.id!=='live'||liveOpen)} onClick={()=>{if(item.id==='live'){setSection('live');setLiveOpen(section==='live' ? !liveOpen : true);setTab('all');return}setSection(item.id);setLiveOpen(false);setTab(item.id)}}><span className={'stat-icon '+item.tone}>{item.icon}</span><span><strong>{item.label}</strong><small>{item.id==='live'?(liveOpen?'Click to close':'Click to open'):item.description}</small></span><ChevronRight size={19}/></button>)}</nav>}
+ ].map(item => {
+  const active = section === item.id && (item.id !== 'live' || liveOpen);
+  const closingLive = item.id === 'live' && active;
+  return <a key={item.id} href={sectionUrl(item.id)} className={'card discord-section-button ' + (active ? 'active' : '')} aria-current={active ? 'page' : undefined} onClick={event => {
+   if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+   event.preventDefault();
+   const url = sectionUrl(closingLive ? null : item.id);
+   if (window.location.pathname + window.location.search !== url) window.history.pushState(null, '', url);
+   selectSection(item.id, item.id === 'live' && !closingLive);
+  }}><span className={'stat-icon '+item.tone}>{item.icon}</span><span><strong>{item.label}</strong><small>{item.id==='live'?(liveOpen?'Click to close':'Click to open'):item.description}</small></span><ChevronRight size={19}/></a>;
+ })}</nav>}
  {!draft&&section==='live'&&liveOpen&&<div className="discord-section-intro"><span>Live notifications</span><h2>What would you like to set up?</h2><p>Choose one area below. Only the settings you open will be shown.</p></div>}
  {!draft&&section==='live'&&liveOpen&&<DiscordOwnerAlerts guilds={guilds}/>} 
  {!draft&&section==='live'&&liveOpen&&<DiscordLiveSettings guilds={guilds}/>} 
