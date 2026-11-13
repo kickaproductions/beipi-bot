@@ -2,9 +2,11 @@ import {NextRequest,NextResponse} from 'next/server';
 import {DISCORD_SESSION_COOKIE,encryptDiscordSession,newestDiscordSession,refreshDiscordSession} from '../session';
 import {getPlatformConnection,savePlatformConnection} from '@/lib/platform-connections';
 
+import {compareDiscordRoles, highestDiscordRole, roleAssignmentRestriction, type DiscordRole} from '@/lib/discord-role-eligibility';
+
 export const runtime='nodejs';
 type Guild={id:string;owner:boolean;permissions:string};
-type Role={id:string;name:string;color:number;position:number;permissions:string;managed:boolean};
+type Role=DiscordRole&{color:number};
 type BotUser={id:string};
 type GuildMember={roles:string[]};
 
@@ -30,22 +32,23 @@ export async function GET(request:NextRequest){
     const headers={Authorization:`Bot ${token}`};
     const [rolesResponse,botResponse]=await Promise.all([
       fetch(`https://discord.com/api/guilds/${guildId}/roles`,{headers,cache:'no-store'}),
-      fetch('https://discord.com/api/users/@me',{headers,cache:'no-store'})
+      mentionOnly ? null : fetch('https://discord.com/api/users/@me',{headers,cache:'no-store'})
     ]);
     if(rolesResponse.status===403||rolesResponse.status===404)return NextResponse.json({error:'Add B.E.I.P.I. to this server and give her Manage Roles permission.'},{status:403});
-    if(!rolesResponse.ok||!botResponse.ok)throw new Error('Discord could not load the server roles.');
-    const roles=await rolesResponse.json() as Role[];const bot=await botResponse.json() as BotUser;
+    if(!rolesResponse.ok||(!mentionOnly&&!botResponse?.ok))throw new Error('Discord could not load the server roles.');
+    const roles=(await rolesResponse.json() as Role[]).sort((a,b)=>compareDiscordRoles(b,a));
+    const roleOption=(role:Role)=>({id:role.id,name:role.name,color:role.color,position:role.position});
     if(mentionOnly){
-      const mentionRoles=roles.filter(role=>role.id!==guildId&&!role.managed).sort((a,b)=>b.position-a.position).map(role=>({id:role.id,name:role.name,color:role.color,position:role.position}));
+      const mentionRoles=roles.map(roleOption);
       const response=NextResponse.json({roles:mentionRoles},{headers:{'Cache-Control':'no-store'}});if(encrypted)response.cookies.set(DISCORD_SESSION_COOKIE,encrypted,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});return response;
     }
+    const bot=await botResponse!.json() as BotUser;
     const memberResponse=await fetch(`https://discord.com/api/guilds/${guildId}/members/${bot.id}`,{headers,cache:'no-store'});
     if(!memberResponse.ok)throw new Error('B.E.I.P.I. could not check her role position.');
     const member=await memberResponse.json() as GuildMember;
-    const botTop=Math.max(0,...roles.filter(role=>member.roles.includes(role.id)).map(role=>role.position));
-    const sensitive=BigInt(8)|BigInt(2)|BigInt(4)|BigInt(32)|BigInt(268435456)|BigInt(1099511627776);
-    const safe=roles.filter(role=>role.id!==guildId&&!role.managed&&role.position<botTop&&(BigInt(role.permissions)&sensitive)===BigInt(0)).sort((a,b)=>b.position-a.position).map(role=>({id:role.id,name:role.name,color:role.color,position:role.position}));
-    const response=NextResponse.json({roles:safe,botRoleReady:botTop>0},{headers:{'Cache-Control':'no-store'}});if(encrypted)response.cookies.set(DISCORD_SESSION_COOKIE,encrypted,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});return response;
+    const botTop=highestDiscordRole(roles,member.roles);
+    const roleOptions=roles.map(role=>({...roleOption(role),assignmentRestriction:roleAssignmentRestriction(role,guildId,botTop)}));
+    const response=NextResponse.json({roles:roleOptions,botRoleReady:Boolean(botTop)},{headers:{'Cache-Control':'no-store'}});if(encrypted)response.cookies.set(DISCORD_SESSION_COOKIE,encrypted,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});return response;
   }catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Discord roles could not be loaded.'},{status:502})}
 }
 
