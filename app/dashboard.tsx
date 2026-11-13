@@ -98,20 +98,32 @@ const futurePlatforms = [
     { name: 'Facebook', className: 'facebook', mark: <span>f</span>, copy: 'Keep Facebook streams visible alongside your other channels.', note: 'Platform access to be reviewed' },
     { name: 'Custom RTMP', className: 'rtmp', mark: <Radio size={23}/>, copy: 'Save another streaming destination or custom broadcast endpoint.', note: 'Manual setup planned' }
 ];
-const appearancePalettes = [
-    { id: 'light', label: 'Light', colours: ['#f8f7fa', '#e9def2', '#b494d7'] },
-    { id: 'dark', label: 'Dark', colours: ['#332541', '#72518e', '#b99ae6'] },
-    { id: 'pastel', label: 'Pastel Rainbow', colours: ['#ffc4d1', '#ffd5b8', '#fff1b6', '#c7efd4', '#bfdefa', '#dbcbf7'] },
-    { id: 'rainbow', label: 'Dark Rainbow', colours: ['#992b4d', '#a95531', '#a57a25', '#28785d', '#365ba1', '#7147aa'] },
-    { id: 'contrast', label: 'Super Contrast', colours: ['#000000', '#ffffff', '#ffff00', '#00ffff'] },
-    { id: 'rose', label: 'Rose', colours: ['#ffe6ef', '#f5a9c5', '#d9618d', '#8a2450'] },
+const appearanceBases = [
+    { id: 'light', label: 'Light', colours: ['#ffffff', '#f0e9f8', '#8058b7'] },
+    { id: 'dark', label: 'Dark', colours: ['#17121f', '#332541', '#b99ae6'] },
+    { id: 'contrast', label: 'Contrast', colours: ['#000000', '#ffffff', '#ffff00'] },
 ] as const;
+
+const appearanceAccents = [
+    { id: 'default', label: 'Default', light: '#7548a5', dark: '#c4a1f1', colours: ['#e9def2', '#a27acc'] },
+    { id: 'light-lavender', label: 'Light Lavender', light: '#69469a', dark: '#dac4ff', colours: ['#f2e9ff', '#bba4e7'] },
+    { id: 'dark-plum', label: 'Dark Plum', light: '#642c71', dark: '#e4a7eb', colours: ['#432046', '#8b4692'] },
+    { id: 'pastel', label: 'Pastel Rainbow', light: '#713a9b', dark: '#e5b8ff', colours: ['#ff9bbb', '#ffba91', '#ffe48b', '#a3e8b3', '#9edbff', '#ccaaff'] },
+    { id: 'rainbow', label: 'Dark Rainbow', light: '#6538a1', dark: '#d1b5ff', colours: ['#ce3758', '#dd7139', '#cf9f22', '#2b9a67', '#3976c4', '#884fc3'] },
+    { id: 'blue', label: 'High Contrast Blue', light: '#0048ac', dark: '#70c7ff', colours: ['#0048ac', '#70c7ff'] },
+    { id: 'green', label: 'High Contrast Green', light: '#176338', dark: '#7dff96', colours: ['#176338', '#7dff96'] },
+    { id: 'yellow', label: 'High Contrast Yellow', light: '#735000', dark: '#ffff00', colours: ['#b87f00', '#ffff00'] },
+    { id: 'rose', label: 'Rose', light: '#8a2450', dark: '#ffa9ca', colours: ['#f5a9c5', '#d9618d', '#8a2450'] },
+    { id: 'lilac', label: 'Lilac', light: '#70469d', dark: '#d2afff', colours: ['#e2cff9', '#af86dc'] },
+    { id: 'teal', label: 'Teal', light: '#00675f', dark: '#6ce8d4', colours: ['#a4ecdc', '#268d80'] },
+] as const;
+
+type AppearanceBase = typeof appearanceBases[number]['id'];
+type AppearanceAccent = typeof appearanceAccents[number]['id'];
 
 function paletteBand(colours: readonly string[]) {
     return `linear-gradient(90deg, ${colours.join(', ')})`;
 }
-
-type AppearancePalette = typeof appearancePalettes[number]['id'];
 
 const COMPLETION_MESSAGE = 'One less thing to remember. Nice work!';
 const CONFETTI_COLOURS = ['#c9a6f5', '#f4a9cc', '#ffe291', '#9ae8bc', '#a8d9ff'];
@@ -162,10 +174,14 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
 
     const [discordDirty, setDiscordDirty] = useState(false);
     const [textSize, setTextSize] = useState(DEFAULT_TEXT_SIZE);
-    const [view, setView] = useState<View>('Home'), [settingsTab, setSettingsTab] = useState<SettingsTab>('account'), [initialCrewSpace, setInitialCrewSpace] = useState(''), [crewInviteOpen, setCrewInviteOpen] = useState(false), [streamTab, setStreamTab] = useState<StreamTab>('overview'), [items, setItems] = useState<Item[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState(''), [toast, setToast] = useState(''), [busy, setBusy] = useState(false), [dialog, setDialog] = useState<string | null>(null), [filter, setFilter] = useState('open'), [menu, setMenu] = useState(false), [focus, setFocus] = useState(false), [palette, setPalette] = useState<AppearancePalette>('dark'), [highContrast, setHighContrast] = useState(false), [reducedMotion, setReducedMotion] = useState(false), [underlineLinks, setUnderlineLinks] = useState(false), [preferencesLoaded, setPreferencesLoaded] = useState(false), [username, setUsername] = useState(initialUsername), [usernameDraft, setUsernameDraft] = useState(initialUsername), [usernameBusy, setUsernameBusy] = useState(false), [usernameError, setUsernameError] = useState(''), [identityName, setIdentityName] = useState(initialUsername || userName);
-    const dark = palette === 'dark' || palette === 'rainbow' || palette === 'contrast';
-    const selectedPalette = appearancePalettes.find(option => option.id === palette) ?? appearancePalettes[1];
-    const effectiveContrast = highContrast || palette === 'contrast';
+    const [view, setView] = useState<View>('Home'), [settingsTab, setSettingsTab] = useState<SettingsTab>('account'), [initialCrewSpace, setInitialCrewSpace] = useState(''), [crewInviteOpen, setCrewInviteOpen] = useState(false), [streamTab, setStreamTab] = useState<StreamTab>('overview'), [items, setItems] = useState<Item[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState(''), [toast, setToast] = useState(''), [busy, setBusy] = useState(false), [dialog, setDialog] = useState<string | null>(null), [filter, setFilter] = useState('open'), [menu, setMenu] = useState(false), [focus, setFocus] = useState(false), [base, setBase] = useState<AppearanceBase>('dark'), [accent, setAccent] = useState<AppearanceAccent>('default'), [highContrast, setHighContrast] = useState(false), [reducedMotion, setReducedMotion] = useState(false), [underlineLinks, setUnderlineLinks] = useState(false), [preferencesLoaded, setPreferencesLoaded] = useState(false), [username, setUsername] = useState(initialUsername), [usernameDraft, setUsernameDraft] = useState(initialUsername), [usernameBusy, setUsernameBusy] = useState(false), [usernameError, setUsernameError] = useState(''), [identityName, setIdentityName] = useState(initialUsername || userName);
+    const dark = base !== 'light';
+    const selectedAccent = appearanceAccents.find(option => option.id === accent) ?? appearanceAccents[0];
+    const effectiveContrast = highContrast || base === 'contrast';
+    const accentColour = base === 'contrast' && accent === 'default' ? '#ffff00' : dark ? selectedAccent.dark : selectedAccent.light;
+    const bannerColours = accent === 'default'
+        ? (appearanceBases.find(option => option.id === base) ?? appearanceBases[1]).colours
+        : selectedAccent.colours;
     const [editingItem, setEditingItem] = useState<Item | null>(null), [itemColour, setItemColour] = useState('#A679C4'), [listLayout, setListLayout] = useState<Record<'Reminders' | 'Idea Pocket', 'list' | 'grid'>>({ Reminders: 'list', 'Idea Pocket': 'grid' }), [checklistLayout, setChecklistLayout] = useState<'list' | 'grid'>('list'), [checklistPhase, setChecklistPhase] = useState<'pre' | 'post'>('pre'), [draggedItemId, setDraggedItemId] = useState(''), [priorityFilter, setPriorityFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all'), [reminderDateFrom, setReminderDateFrom] = useState(''), [reminderDateTo, setReminderDateTo] = useState('');
     const [twitch, setTwitch] = useState<TwitchConnection>({ connected: false }), [twitchLoading, setTwitchLoading] = useState(true);
     const [discord, setDiscord] = useState<DiscordConnection>({ connected: false }), [discordLoading, setDiscordLoading] = useState(true);
@@ -193,9 +209,16 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
             setToast('Approved. Pip added it to the right list.');
         window.setTimeout(() => { void syncApprovedItems(false); }, 700);
     }
-    useEffect(() => { const savedPalette = appearancePalettes.find(option => option.id === window.localStorage.getItem('beipi-palette'));
-        if (savedPalette) setPalette(savedPalette.id);
-        else if (window.localStorage.getItem('beipi-theme') === 'light') setPalette('light'); setTextSize(getSavedTextSize(window.localStorage)); setHighContrast(window.localStorage.getItem('beipi-a11y-high-contrast') === 'true'); setUnderlineLinks(window.localStorage.getItem('beipi-a11y-underline-links') === 'true'); const savedMotion = window.localStorage.getItem('beipi-a11y-reduced-motion'); setReducedMotion(savedMotion === null ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : savedMotion === 'true'); const reminderLayout = window.localStorage.getItem('beipi-reminder-layout'), ideaLayout = window.localStorage.getItem('beipi-idea-layout'), savedChecklistLayout = window.localStorage.getItem('beipi-checklist-layout'); setListLayout({ Reminders: reminderLayout === 'grid' ? 'grid' : 'list', 'Idea Pocket': ideaLayout === 'list' ? 'list' : 'grid' }); setChecklistLayout(savedChecklistLayout === 'grid' ? 'grid' : 'list'); setPreferencesLoaded(true); }, []);
+    useEffect(() => {
+        const storage = window.localStorage;
+        const legacy = storage.getItem('beipi-palette');
+        const savedBase = appearanceBases.find(option => option.id === storage.getItem('beipi-appearance-base'));
+        const savedAccent = appearanceAccents.find(option => option.id === storage.getItem('beipi-appearance-accent'));
+        const legacyBase = legacy === 'contrast' ? 'contrast'
+            : legacy === 'light' || legacy === 'pastel' || legacy === 'rose' || (!legacy && storage.getItem('beipi-theme') === 'light') ? 'light' : 'dark';
+        setBase(savedBase?.id ?? legacyBase);
+        setAccent(savedAccent?.id ?? (legacy === 'pastel' || legacy === 'rainbow' || legacy === 'rose' ? legacy : 'default'));
+        setTextSize(getSavedTextSize(window.localStorage)); setHighContrast(window.localStorage.getItem('beipi-a11y-high-contrast') === 'true'); setUnderlineLinks(window.localStorage.getItem('beipi-a11y-underline-links') === 'true'); const savedMotion = window.localStorage.getItem('beipi-a11y-reduced-motion'); setReducedMotion(savedMotion === null ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : savedMotion === 'true'); const reminderLayout = window.localStorage.getItem('beipi-reminder-layout'), ideaLayout = window.localStorage.getItem('beipi-idea-layout'), savedChecklistLayout = window.localStorage.getItem('beipi-checklist-layout'); setListLayout({ Reminders: reminderLayout === 'grid' ? 'grid' : 'list', 'Idea Pocket': ideaLayout === 'list' ? 'list' : 'grid' }); setChecklistLayout(savedChecklistLayout === 'grid' ? 'grid' : 'list'); setPreferencesLoaded(true); }, []);
     useEffect(() => {
         function restoreDashboardLocation() {
             const params = new URLSearchParams(window.location.search);
@@ -220,7 +243,7 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
         return () => window.removeEventListener('popstate', restoreDashboardLocation);
     }, [isTester]);
     useEffect(() => { if (!preferencesLoaded)
-        return; window.localStorage.setItem('beipi-palette', palette); window.localStorage.setItem('beipi-a11y-high-contrast', String(highContrast)); window.localStorage.setItem('beipi-a11y-reduced-motion', String(reducedMotion)); window.localStorage.setItem('beipi-a11y-underline-links', String(underlineLinks)); }, [preferencesLoaded, palette, highContrast, reducedMotion, underlineLinks]);
+        return; window.localStorage.setItem('beipi-appearance-base', base); window.localStorage.setItem('beipi-appearance-accent', accent); window.localStorage.setItem('beipi-a11y-high-contrast', String(highContrast)); window.localStorage.setItem('beipi-a11y-reduced-motion', String(reducedMotion)); window.localStorage.setItem('beipi-a11y-underline-links', String(underlineLinks)); }, [preferencesLoaded, base, accent, highContrast, reducedMotion, underlineLinks]);
     useEffect(() => {
         if (preferencesLoaded) window.localStorage.setItem(TEXT_SIZE_KEY, String(textSize));
     }, [preferencesLoaded, textSize]);
@@ -439,9 +462,9 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
         </div>;
     }
     function empty(kind: string) { return <div className="empty"><div className="empty-icon">{kind === 'checklist' ? <ClipboardCheck /> : kind === 'idea' ? <Lightbulb /> : <Leaf />}</div><h3>{kind === 'checklist' ? 'Your routine, your way.' : kind === 'idea' ? 'A home for your next good idea.' : 'A little space to breathe.'}</h3><p>{kind === 'checklist' ? 'Save the things you like to check before going live.' : kind === 'idea' ? 'Stream ideas, games to try, little thoughts worth keeping.' : 'Nothing waiting here. Add a note whenever you need one.'}</p>{kind === 'checklist' ? <button className="primary" disabled={busy} onClick={() => void template()}>Use a starter checklist <Plus size={16}/></button> : <button className="outline" onClick={() => openNewItem(kind)}>Add your first {kind === 'idea' ? 'idea' : 'reminder'} <Plus size={16}/></button>}</div>; }
-    return <div className={'shell ' + (popout ? 'dashboard-popout ' : '') + (focus ? 'focus-mode ' : '') + (dark ? 'dark-theme ' : 'light-theme ') + (textSize > DEFAULT_TEXT_SIZE ? 'text-large ' : '') + (effectiveContrast ? 'high-contrast ' : '') + (reducedMotion ? 'reduce-motion ' : '') + (underlineLinks ? 'underline-links' : '')} data-palette={palette} style={{ '--dashboard-text-scale': textSize / DEFAULT_TEXT_SIZE, '--palette-band': paletteBand(selectedPalette.colours) } as CSSProperties}>
+    return <div className={'shell ' + (popout ? 'dashboard-popout ' : '') + (focus ? 'focus-mode ' : '') + (dark ? 'dark-theme ' : 'light-theme ') + (textSize > DEFAULT_TEXT_SIZE ? 'text-large ' : '') + (effectiveContrast ? 'high-contrast ' : '') + (reducedMotion ? 'reduce-motion ' : '') + (underlineLinks ? 'underline-links' : '')} data-palette={base} data-accent={accent} style={{ '--dashboard-text-scale': textSize / DEFAULT_TEXT_SIZE, '--palette-band': paletteBand(bannerColours), '--dashboard-accent': accentColour } as CSSProperties}>
  <aside id="dashboard-navigation" className={menu ? 'sidebar visible' : 'sidebar'}><a href="/" className="brand"><span className="brand-mark">B<span>•</span></span><div>B.E.I.P.I<small>Your streaming companion</small></div></a><div className="workspace"><div className="workspace-icon">{identityName.slice(0, 1).toUpperCase()}</div><div><strong>{identityName}</strong><small>{isTester ? 'Your private dashboard' : 'Dashboard preview'}</small></div><ShieldCheck size={16}/></div><div className="nav-label">YOUR SPACE</div><nav aria-label="Dashboard sections">{navigation.map(({ name, icon: Icon }) => { const locked = !isTester && name !== 'Home', count = name === 'Reminders' ? reminders.length : name === 'Idea Pocket' ? open.filter(item => item.kind === 'idea').length : 0; return <a key={name} href={locked ? "/tester" : dashboardUrl(name, streamTab, popout)} className={'dashboard-nav-link ' + (view === name ? 'active ' : '') + (locked ? 'nav-locked' : '')} onClick={event => followDashboardLink(event, name)} aria-current={view === name ? 'page' : undefined} aria-label={locked ? `${name} — beta access required` : name} title={popout ? name : undefined}><Icon size={19}/><span className="dashboard-nav-text">{name}</span>{locked ? <LockKeyhole className="nav-lock" size={14}/> : count > 0 && <span className="count">{count}</span>}</a>; })}</nav><div className="sidebar-note"><Heart size={17}/><p>Less to remember.<br /><strong>More room to be you.</strong></p></div><a href={dashboardUrl("Account settings", streamTab, popout)} className={'profile ' + (view === 'Account settings' ? 'active' : '')} aria-label={popout ? 'Account settings' : undefined} title={popout ? 'Account settings' : undefined} onClick={event => followDashboardLink(event, 'Account settings')} aria-current={view === 'Account settings' ? 'page' : undefined}><div className="avatar">{identityName.slice(0, 1).toUpperCase()}</div><div><strong>{identityName}</strong><small>Account settings</small></div><Settings size={15}/></a></aside>
- <div className="body"><header className="topbar"><div className="crumb"><button className="mobile-menu" aria-label={menu ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menu} aria-controls="dashboard-navigation" onClick={() => setMenu(!menu)}><Menu size={22}/></button><span>Your companion</span><ChevronRight size={14}/><strong>{view}</strong></div><div className="topbar-actions">{!popout && <a className="quiet dashboard-popout-link" href={popoutUrl} target="_blank" rel="noopener" aria-label="Open dashboard in a new window" title="Open dashboard in a new window" onClick={openDashboardWindow}><ExternalLink size={15}/><span>Pop out</span></a>}<button className="quiet theme-toggle" onClick={() => setPalette(dark ? 'light' : 'dark')} aria-pressed={!dark} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>{dark ? <Sun size={15}/> : <Moon size={15}/>}<span>{dark ? 'Light mode' : 'Dark mode'}</span></button><button className={'quiet ' + (focus ? 'selected' : '')} onClick={() => setFocus(!focus)} aria-pressed={focus}><Leaf size={15}/>{focus ? 'Show everything' : 'Focus view'}</button></div></header>
+ <div className="body"><header className="topbar"><div className="crumb"><button className="mobile-menu" aria-label={menu ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menu} aria-controls="dashboard-navigation" onClick={() => setMenu(!menu)}><Menu size={22}/></button><span>Your companion</span><ChevronRight size={14}/><strong>{view}</strong></div><div className="topbar-actions">{!popout && <a className="quiet dashboard-popout-link" href={popoutUrl} target="_blank" rel="noopener" aria-label="Open dashboard in a new window" title="Open dashboard in a new window" onClick={openDashboardWindow}><ExternalLink size={15}/><span>Pop out</span></a>}<button className="quiet theme-toggle" onClick={() => setBase(dark ? 'light' : 'dark')} aria-pressed={!dark} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>{dark ? <Sun size={15}/> : <Moon size={15}/>}<span>{dark ? 'Light mode' : 'Dark mode'}</span></button><button className={'quiet ' + (focus ? 'selected' : '')} onClick={() => setFocus(!focus)} aria-pressed={focus}><Leaf size={15}/>{focus ? 'Show everything' : 'Focus view'}</button></div></header>
 <main><div className="page-heading"><div>{view === 'Reminders' && <div className="eyebrow">A LITTLE LESS TO HOLD IN YOUR HEAD</div>}<h1>{view === 'Home' ? `Welcome, ${identityName}.` : view}</h1><p>{view === 'Home' ? (isTester ? 'Pick up where you left off. One little thing at a time.' : 'Take a look around while your beta access is locked.') : view === 'Reminders' ? 'A gentle place for the things you want to remember.' : view === 'My Stream' ? 'Plan, prepare and understand your streams in one place.' : view === 'Idea Pocket' ? 'Put it here before it disappears.' : view === 'Discord Setup' ? 'Your banners, messages and reaction roles. One step at a time.' : view === 'Connections' ? 'Your streaming platforms, together in one place.' : view === 'Account settings' ? 'Your profile, security and accessibility preferences in one place.' : 'A little support from the people you trust.'}</p></div>{isTester && view === 'My Crew' && <button className="primary" onClick={() => setCrewInviteOpen(true)}><UserPlus size={17}/> Give / Revoke access to My Crew</button>}{isTester && (['Reminders', 'Idea Pocket', 'Connections'].includes(view) || (view === 'My Stream' && streamTab === 'checklist')) && <button className="primary" onClick={() => openNewItem(kinds[view] ?? 'reminder')}><Plus size={17}/>{view === 'Idea Pocket' ? 'Save an idea' : view === 'My Stream' ? 'Add a step' : view === 'Connections' ? 'Save a channel' : 'Add a reminder'}</button>}</div>
  {error && <div className="error" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss error"><X size={16}/></button></div>}
  {loading ? <div className="loading">B.E.I.P.I is finding your place…</div> : <>
@@ -489,18 +512,32 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     <span className="stat-icon peach"><Palette size={20}/></span>
     <span><strong>Appearance</strong><small>Dashboard colours and themes.</small></span>
     <ChevronRight size={18}/>
- </button><button type="button" className={settingsTab === 'accessibility' ? 'active' : ''} aria-current={settingsTab === 'accessibility' ? 'page' : undefined} onClick={() => setSettingsTab('accessibility')}><span className="stat-icon mint"><Accessibility size={20}/></span><span><strong>Accessibility</strong><small>Text, contrast, motion and links.</small></span><ChevronRight size={18}/></button></nav>{settingsTab === 'appearance' && <fieldset className="appearance-palettes">
-    <legend>Appearance</legend>
-    <div className="appearance-palette-options">
-        {appearancePalettes.map(option => (
-            <label key={option.id} style={{ '--preview-band': paletteBand(option.colours) } as CSSProperties}>
-                <span className="appearance-swatch" aria-hidden="true"/>
-                <input type="radio" name="dashboard-palette" checked={palette === option.id} onChange={() => setPalette(option.id)}/>
-                <span>{option.label}</span>
-            </label>
-        ))}
-    </div>
-</fieldset>}{settingsTab === 'accessibility' && <section className="card full accessibility-page"><section className="accessibility-settings" aria-labelledby="accessibility-title"><header><span className="stat-icon lavender"><Accessibility size={21}/></span><div><h2 id="accessibility-title">Your accessibility choices</h2><p>Make B.E.I.P.I. feel clearer and more comfortable for you. These choices stay on this device.</p></div></header>
+ </button><button type="button" className={settingsTab === 'accessibility' ? 'active' : ''} aria-current={settingsTab === 'accessibility' ? 'page' : undefined} onClick={() => setSettingsTab('accessibility')}><span className="stat-icon mint"><Accessibility size={20}/></span><span><strong>Accessibility</strong><small>Text, contrast, motion and links.</small></span><ChevronRight size={18}/></button></nav>{settingsTab === 'appearance' && <section className="appearance-palettes" aria-label="Appearance">
+    <fieldset>
+        <legend>Base</legend>
+        <div className="appearance-palette-options">
+            {appearanceBases.map(option => (
+                <label key={option.id} style={{ '--preview-band': paletteBand(option.colours) } as CSSProperties}>
+                    <span className="appearance-swatch" aria-hidden="true"/>
+                    <input type="radio" name="dashboard-base" checked={base === option.id} onChange={() => setBase(option.id)}/>
+                    <span>{option.label}</span>
+                </label>
+            ))}
+        </div>
+    </fieldset>
+    <fieldset>
+        <legend>Accent</legend>
+        <div className="appearance-palette-options">
+            {appearanceAccents.map(option => (
+                <label key={option.id} style={{ '--preview-band': paletteBand(option.colours) } as CSSProperties}>
+                    <span className="appearance-swatch" aria-hidden="true"/>
+                    <input type="radio" name="dashboard-accent" checked={accent === option.id} onChange={() => setAccent(option.id)}/>
+                    <span>{option.label}</span>
+                </label>
+            ))}
+        </div>
+    </fieldset>
+</section>}{settingsTab === 'accessibility' && <section className="card full accessibility-page"><section className="accessibility-settings" aria-labelledby="accessibility-title"><header><span className="stat-icon lavender"><Accessibility size={21}/></span><div><h2 id="accessibility-title">Your accessibility choices</h2><p>Make B.E.I.P.I. feel clearer and more comfortable for you. These choices stay on this device.</p></div></header>
     <div className="accessibility-text-size">
         <div className="accessibility-text-size-heading">
             <label htmlFor="dashboard-text-size"><Type size={20} aria-hidden="true"/> Font size</label>
