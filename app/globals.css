@@ -1023,22 +1023,31 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
   .dashboard-popout .topbar{height:auto;min-height:65px;flex-wrap:wrap;gap:8px;padding:10px 14px}
 }
 
-.completion-confetti{display:none;position:absolute;left:50%;top:0;pointer-events:none}
-.completion-confetti i{
-  position:absolute;
-  width:5px;
-  height:8px;
-  border-radius:1px;
-  background:var(--confetti-colour);
-  animation:completion-confetti-burst .65s ease-out both;
+.completion-confetti{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:101;
+  overflow:hidden;
+  pointer-events:none;
 }
-.completion-confetti i:nth-child(even){width:6px;height:6px;border-radius:50%}
 @media(prefers-reduced-motion:no-preference){
   .shell:not(.reduce-motion) .completion-confetti{display:block}
+  .completion-confetti span{
+    position:absolute;
+    top:0;
+    left:var(--confetti-left);
+    width:8px;
+    height:13px;
+    border-radius:2px;
+    background:var(--confetti-colour);
+    animation:completion-confetti-fall var(--confetti-duration) var(--confetti-delay) cubic-bezier(.2,.45,.6,1) both;
+  }
+  .completion-confetti span:nth-child(even){width:7px;height:7px;border-radius:50%}
 }
-@keyframes completion-confetti-burst{
-  from{transform:rotate(var(--confetti-angle)) translateY(0) scale(.4);opacity:0}
-  18%{opacity:1}
-  68%{opacity:1}
-  to{transform:rotate(var(--confetti-angle)) translateY(calc(-1 * var(--confetti-distance))) rotate(180deg);opacity:0}
+@keyframes completion-confetti-fall{
+  from{transform:translate3d(0,-18px,0) rotate(0);opacity:0}
+  9%{opacity:1}
+  82%{opacity:1}
+  to{transform:translate3d(var(--confetti-drift),105vh,0) rotate(var(--confetti-spin));opacity:0}
 }
