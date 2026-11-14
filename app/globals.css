@@ -596,7 +596,6 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .accessibility-text-size-range{font-size:.78rem;color:var(--muted)}
 .accessibility-text-size .accessibility-text-preview{margin-top:5px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-size:.875rem;color:var(--ink)}
 .shell.text-large :is(p,button,a,label,input,select,textarea):not(:where(.item-text p)){font-size:calc(1rem * var(--dashboard-text-scale) / 1.2)!important;line-height:1.6}.shell.text-large small:not(:where(.item-text small)){font-size:calc(.9rem * var(--dashboard-text-scale) / 1.2)!important;line-height:1.5}.shell.text-large .eyebrow,.shell.text-large .nav-label,.shell.text-large .status{font-size:calc(.82rem * var(--dashboard-text-scale) / 1.2)!important}.shell.text-large .sidebar{width:280px}.shell.text-large .body{margin-left:280px;width:calc(100% - 280px)}
-.shell.dark-theme.high-contrast{--ink:#fff;--muted:#f0e8f5;--purple:#dec1ff;--line:#796989;--bg:#09070d;--light:#352743}.shell.dark-theme.high-contrast :is(.sidebar,.topbar,.card,.modal,.account-settings){border-color:#796989}.shell.dark-theme.high-contrast .card{background:#17111e}.shell.light-theme.high-contrast{--ink:#1b1123;--muted:#493d53;--purple:#5f238e;--line:#786a82;--bg:#fff;--light:#eee3f7}.shell.high-contrast :is(.subtle,small,.field-help,.card-heading p,.page-heading p){color:var(--muted)!important}.shell.high-contrast :is(.primary,.outline,.quiet){border-width:2px}
 .shell.reduce-motion *,.shell.reduce-motion *::before,.shell.reduce-motion *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}.shell.underline-links a:not(.primary):not(.outline):not(.hero-button){text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
 @media(max-width:1100px){.shell.text-large .sidebar{width:245px}.shell.text-large .body{margin-left:245px;width:calc(100% - 245px)}}
 @media(max-width:650px){.settings-category-menu{grid-template-columns:1fr}.accessibility-settings{padding:20px 16px}.accessibility-grid{grid-template-columns:1fr}.shell.text-large .sidebar{width:270px}.shell.text-large .body{margin-left:0;width:100%}.setting-row{align-items:flex-start;flex-direction:column}.setting-row>.outline{width:100%;justify-content:center}}
@@ -1054,9 +1053,9 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 
 .shell[data-palette] .topbar{
   background-image:var(--palette-band);
-  background-position:top;
+  background-position:bottom;
   background-repeat:no-repeat;
-  background-size:100% 7px;
+  background-size:100% 8px;
 }
 .appearance-palettes{
   min-inline-size:0;
@@ -1067,42 +1066,238 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
   background:linear-gradient(var(--bg),var(--bg)) padding-box,var(--palette-band) border-box;
   border-top:5px solid transparent;
 }
-.appearance-palettes legend{padding:0 7px;color:var(--ink);background:var(--bg);font-family:var(--type-family);font-size:calc(var(--type-section) * var(--dashboard-text-scale,1));font-weight:650}
+.appearance-palettes legend{padding:0 0 8px;color:var(--ink);font-family:var(--type-family);font-size:calc(var(--type-section) * var(--dashboard-text-scale,1));font-weight:650}
 .appearance-palette-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr));gap:10px}
 .appearance-palette-options label{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:8px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);cursor:pointer}
-.appearance-palette-options label:has(input:checked){border-color:var(--purple);box-shadow:inset 0 0 0 1px var(--purple)}
+.appearance-palette-options label:has(input:checked){background:var(--light);border-color:var(--purple);box-shadow:inset 0 0 0 1px var(--purple)}
 .appearance-palette-options label:has(input:focus-visible){outline:2px solid var(--purple);outline-offset:2px}
 .appearance-palette-options input{margin:0;accent-color:var(--purple)}
-.appearance-swatch{grid-column:1/-1;height:32px;border:1px solid var(--line);border-radius:5px;background:var(--preview-band)}
+.appearance-swatch{grid-column:1/-1;height:44px;border:1px solid var(--line);border-radius:5px;background:var(--preview-band)}
 .appearance-palettes fieldset{border:0;padding:0;margin:0;min-inline-size:0}
 .appearance-palettes fieldset+fieldset{margin-top:20px;padding-top:12px;border-top:1px solid var(--line)}
-.appearance-palettes legend{padding:0 0 8px}
-.shell[data-palette] .topbar{background-size:100% 10px}
-.shell:is([data-accent=pastel],[data-accent=rainbow]) .topbar{background-size:100% 18px}
-.shell[data-palette=contrast]{--bg:#000;--light:#171717;--ink:#fff;--muted:#fff;--line:#fff;background:var(--bg);color:var(--ink)}
-.shell:is([data-accent]:not([data-accent=default]),[data-palette=contrast]){--purple:var(--dashboard-accent)}
-.shell:is([data-accent]:not([data-accent=default]),[data-palette=contrast]) :is(.primary,.brand-mark,.completed .check){background:var(--purple);color:var(--bg)}
-.shell:is([data-accent]:not([data-accent=default]),[data-palette=contrast]) :is(.text-button,.outline,.dashboard-nav-link.active){color:var(--purple)}
-.shell:is([data-accent]:not([data-accent=default]),[data-palette=contrast]) .dashboard-nav-link.active{background:var(--light);box-shadow:inset 4px 0 var(--purple)}
-.shell:is([data-accent=pastel],[data-accent=rainbow]) .dashboard-nav-link.active{background-image:var(--palette-band);background-repeat:no-repeat;background-size:5px 100%;box-shadow:none}
-.shell[data-palette=contrast] :is(.sidebar,.topbar,.card,.modal,.quiet,.community-rule-section,.community-rule-editor,.live-role-picker,.live-role-picker label){background-color:var(--bg);border-color:var(--line);color:var(--ink)}
-.shell[data-palette=contrast] :is(.hero,.notice,.connection-strip,.analytics-preview,.checklist-toolbar,.live-role-picker label:has(input:checked)){background:var(--light);border-color:var(--line);color:var(--ink)}
-.shell[data-palette=contrast] :focus-visible{outline:3px solid var(--purple);outline-offset:3px}
-.shell[data-palette=contrast] :is(.field-help,.card p,.quiet){color:var(--ink)}
+.shell[data-accent]:not([data-accent=default],.high-contrast){--purple:var(--dashboard-accent)}
+.shell[data-accent]:not([data-accent=default],.high-contrast) :is(.primary,.brand-mark,.completed .check){
+  background:var(--purple);
+  color:var(--bg);
+}
+.shell[data-accent]:not([data-accent=default],.high-contrast) :is(.text-button,.outline){color:var(--purple)}
+
+.shell[data-accent]:not([data-accent=default],.high-contrast){
+  --accent-wash:12%;
+  --accent-fill:23%;
+  --accent-panel:color-mix(in srgb,var(--purple) var(--accent-wash),var(--bg));
+  --accent-edge:color-mix(in srgb,var(--purple) 44%,var(--bg));
+  --light:color-mix(in srgb,var(--purple) var(--accent-fill),var(--bg));
+  color:var(--ink);
+  background:var(--accent-panel);
+}
+.shell.light-theme[data-accent]:not([data-accent=default],.high-contrast){--muted:#51445b}
+.shell.dark-theme[data-accent]:not([data-accent=default],.high-contrast){
+  --accent-wash:9%;
+  --accent-fill:17%;
+}
+.shell[data-accent]:not([data-accent=default],.high-contrast) .sidebar{
+  background:var(--palette-sidebar) right / 6px 100% no-repeat,var(--light);
+  border-color:var(--accent-edge);
+}
+.shell[data-accent]:not([data-accent=default],.high-contrast) .topbar{
+  background-color:var(--light);
+  background-size:100% 10px;
+  border-color:var(--accent-edge);
+}
+.shell[data-accent]:not([data-accent=default],.high-contrast) :is(.crumb strong,.dashboard-nav-link:not(.active),.discord-section-button.active strong,.settings-category-menu>button.active strong){color:var(--ink)}
+.shell[data-accent]:not([data-accent=default],.high-contrast) .dashboard-nav-link:not(.active):hover{background:var(--accent-panel)}
+.shell[data-accent]:not([data-accent=default],.high-contrast) :is(.discord-section-button,.settings-category-menu>button).active{
+  background:var(--light);
+  border-color:var(--purple);
+  box-shadow:inset 0 0 0 1px var(--purple);
+}
+.shell[data-accent]:not([data-accent=default],.high-contrast) :is(.card-heading,.crew-workspace .card>header,.shared-space-grid>.card>header){
+  background:var(--light);
+  border-bottom:1px solid var(--accent-edge);
+}
+.shell[data-accent]:not([data-accent=default],.high-contrast) :is(.hero,.analytics-preview,.stream-summary,.stats>:is(button,a),.connection-strip){
+  background:var(--light);
+  border-color:var(--accent-edge);
+}
+.shell[data-accent]:not([data-accent=default],.high-contrast) .hero:after{background:var(--accent-panel)}
+.shell[data-accent]:not([data-accent=default],.high-contrast) :is(.hero-button,.outline){background-color:var(--bg);border-color:var(--accent-edge);color:var(--purple)}
+.shell[data-accent]:not([data-accent=default],.high-contrast) :is(.hero-button,.outline):hover{background-color:var(--accent-panel)}
+.shell[data-accent]:not([data-accent=default],.high-contrast) :is(.tabs,.layout-toggle,.checklist-phase-tabs) .chosen{
+  background:var(--purple);
+  border-color:var(--purple);
+  color:var(--bg);
+}
+.shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast){--rainbow-fill:36%}
+.shell.dark-theme:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast){--rainbow-fill:25%}
+.shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast) .sidebar{
+  background:var(--palette-sidebar) right / 7px 100% no-repeat,var(--palette-wash);
+}
+.shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast) .topbar{
+  background:var(--palette-band) bottom / 100% 12px no-repeat,var(--palette-wash);
+}
+.shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast) :is(.hero,.analytics-preview){
+  background:var(--palette-band) top / 100% 7px no-repeat,var(--palette-wash);
+}
+.shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast) :is(.home-grid,.stream-overview-grid)>:nth-child(2),
+.shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast) .stats>:nth-child(2){
+  --light:color-mix(in srgb,var(--palette-middle) var(--rainbow-fill),var(--bg));
+}
+.shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast) .stats>:nth-child(3){
+  --light:color-mix(in srgb,var(--palette-last) var(--rainbow-fill),var(--bg));
+}
+.shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast) .appearance-palettes{
+  background:var(--palette-wash) padding-box,var(--palette-band) border-box;
+}
+@media(max-width:650px){
+  .shell.dashboard-popout[data-palette] .topbar{padding-bottom:18px}
+}
 
 .live-role-picker label{min-width:0}
 .live-role-picker label input{flex:none}
 .live-role-picker strong{white-space:normal;overflow-wrap:anywhere}
 .live-role-picker label:has(input:disabled)>small{color:var(--muted);overflow-wrap:anywhere}
 
-.shell[data-palette=contrast] :is(input:not([type=radio],[type=checkbox],[type=color]),select,textarea){
-  background:#000;
-  color:#fff;
-  border-color:#fff;
+/* The current page has the same shape cue in every palette and sidebar size. */
+.shell .sidebar{overflow-y:auto;scroll-padding-block:8px}
+.shell .sidebar :is(.dashboard-nav-link,.profile)[aria-current=page]{
+  position:relative;
+  border-radius:12px;
+  background:transparent;
+  color:var(--ink);
+  font-weight:700;
 }
-.shell[data-palette=contrast] :is(input,textarea)::placeholder{color:#ddd}
-.shell[data-palette=contrast] a:not(.primary){color:var(--purple)}
-.shell[data-palette=contrast] .dashboard-nav-link.active{color:#000;background:var(--purple)}
+.shell .sidebar :is(.dashboard-nav-link,.profile)[aria-current=page]::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border:2px solid currentColor;
+  border-radius:inherit;
+  pointer-events:none;
+}
+.shell .sidebar .profile{padding:12px 8px;margin-top:12px}
+.shell .sidebar .profile[aria-current=page]{border-top-color:transparent}
+.shell .sidebar :is(.dashboard-nav-link,.profile):focus-visible{outline-color:var(--ink)!important}
+@media(max-width:650px){
+  .shell.dashboard-popout .sidebar .profile{padding-inline:0;margin-top:auto}
+}
+
+.shell.high-contrast{
+  --bg:#fff;
+  --light:#eee;
+  --ink:#1b1b1b;
+  --muted:#444;
+  --line:#575757;
+  --purple:#4c1467;
+  --contrast-text:var(--ink);
+  background:var(--bg);
+  color:var(--ink);
+  color-scheme:light;
+}
+.shell.dark-theme.high-contrast{
+  --bg:#0b0b0b;
+  --light:#242424;
+  --ink:#fff;
+  --muted:#ddd;
+  --line:#a6a6a6;
+  --purple:#dec1ff;
+  color-scheme:dark;
+}
+.shell.high-contrast[data-palette=contrast]{
+  --bg:#000;
+  --light:#181818;
+  --line:#fff;
+  --purple:var(--dashboard-accent);
+}
+
+/* Layered important declarations override hard-coded component colours. */
+@layer dashboard-contrast {
+  .shell.high-contrast :where(*){
+    color:var(--contrast-text)!important;
+  }
+  .shell.high-contrast :where(*):not(:where(
+    .appearance-swatch,.item-colour-dot,.live-role-colour,.stream-readiness-pie,
+    .completion-confetti span,input[type=color]
+  )){
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+
+  .shell.high-contrast :where(
+    .sidebar,.topbar,.card,.modal,[role=dialog],.crew-schedule-modal,
+    .live-template-preview,.discord-preview,.crew-day-tooltip,.toast,
+    select,option,input:not([type=checkbox],[type=radio],[type=range],[type=color]),textarea
+  ){
+    background-color:var(--bg)!important;
+  }
+  .shell.high-contrast :where(
+    .hero,.notice,.connection-strip,.appearance-palettes,.accessibility-settings,
+    .checklist-toolbar,.tabs,.pill,.priority-pill,.count,.stat-icon
+  ){
+    background-color:var(--light)!important;
+  }
+  .shell.high-contrast :where(
+    .sidebar,.topbar,.card,.modal,fieldset,.appearance-palettes,.appearance-palette-options label,
+    .outline,.quiet,.check,.crew-check,.layout-toggle,select,input,textarea,button,[role=button]
+  ){
+    border-color:var(--line)!important;
+  }
+  .shell.high-contrast :where(button,[role=button],select,input,textarea,.primary,.outline,.quiet,.hero-button):not(:where(
+    [type=checkbox],[type=radio],[type=range],[type=hidden]
+  )){
+    border:1px solid var(--line)!important;
+  }
+  .shell.high-contrast :where(.primary,.brand-mark,.completed .check,.done .crew-check){
+    --contrast-text:var(--bg);
+    background-color:var(--purple)!important;
+    border-color:var(--purple)!important;
+  }
+  .shell.high-contrast :where(svg){color:inherit!important}
+  .shell.high-contrast :where(a:not(.primary,.card,.hero-button,.outline,.quiet,.brand,.profile,.dashboard-nav-link),.text-button){
+    --contrast-text:var(--purple);
+    text-decoration:underline;
+    text-underline-offset:.18em;
+  }
+  .shell.high-contrast :where(input,textarea)::placeholder{color:var(--muted)!important}
+  .shell.high-contrast :where(input)::file-selector-button{
+    background:var(--bg)!important;
+    border:1px solid var(--line)!important;
+    color:var(--ink)!important;
+  }
+  .shell.high-contrast :where(input[type=checkbox],input[type=radio],input[type=range]){
+    accent-color:var(--purple)!important;
+  }
+  .shell.high-contrast :where(
+    [aria-selected=true],[aria-pressed=true],.chosen,.discord-section-button.active,
+    .settings-category-menu > button.active,.appearance-palette-options label:has(input:checked)
+  ){
+    outline:2px solid var(--ink)!important;
+    outline-offset:-3px!important;
+  }
+  .shell.high-contrast :where(:focus-visible,.stream-confirm-switch:has(input:focus-visible)>span,.appearance-palette-options label:has(input:focus-visible)){
+    outline:3px solid var(--purple)!important;
+    outline-offset:3px!important;
+  }
+  .shell.high-contrast :where(a,button:enabled):hover{text-decoration:underline}
+  .shell.high-contrast :where(.progress,.stream-confirm-switch>span){
+    border:1px solid var(--line)!important;
+    background-color:var(--bg)!important;
+  }
+  .shell.high-contrast :where(.progress span,.stream-confirm-switch>span::after,.stream-confirm-switch input:checked+span){
+    background-color:var(--purple)!important;
+  }
+  .shell.high-contrast :where(.stream-confirm-switch input:checked+span::after){
+    background-color:var(--bg)!important;
+  }
+  .shell.high-contrast :where(.stream-readiness-pie){
+    background:conic-gradient(var(--purple) var(--readiness),var(--bg) 0);
+    border-color:var(--line)!important;
+  }
+  .shell.high-contrast :where(.hero::after){background:none!important}
+  .shell.high-contrast :where(.modal-backdrop,.access-dialog-backdrop,.crew-modal-backdrop){
+    background-color:rgb(0 0 0 / 72%)!important;
+  }
+}
 @media(forced-colors:active){
   .appearance-swatch{forced-color-adjust:none}
 }
