@@ -362,7 +362,7 @@ body{font-size:16px}
 
 /* Dashboard sidebar anchors */
 .shell .brand{flex-shrink:0}
-.shell .nav-label{margin-top:auto}
+.shell .nav-label{margin-top:28px}
 .shell nav{flex-shrink:0}
 .shell .profile{margin-top:auto;flex-shrink:0}
 .shell nav .nav-locked{color:#8e8396}.shell nav .nav-locked:hover{background:#2a2033}.nav-lock{margin-left:auto;color:#a68ab8}.beta-preview-hero .hero-copy{max-width:620px}.beta-preview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:22px 0}.beta-preview-card{position:relative;display:block;padding:22px;text-decoration:none;transition:transform .15s,border-color .15s}.beta-preview-card:hover{transform:translateY(-2px);border-color:#7a6289}.beta-preview-card h2{font-size:1rem;margin:18px 0 7px}.beta-preview-card p{min-height:43px;color:var(--muted);font-size:.8rem;line-height:1.55}.beta-preview-card small{display:flex;align-items:center;gap:4px;margin-top:18px;color:#a98abe;font-size:.7rem}.beta-preview-lock{position:absolute;right:17px;top:17px;display:flex;align-items:center;gap:5px;padding:5px 7px;border:1px solid var(--line);border-radius:999px;color:#9f85b1;font-size:.62rem;font-weight:700}.beta-preview-strip .outline{display:flex}.dark-theme .beta-preview-card{background:#211a29;border-color:#40334b}.dark-theme .beta-preview-card:hover{border-color:#806c8d}.dark-theme .beta-preview-card p{color:#b9aebf}.dark-theme .beta-preview-lock{border-color:#4a3a55;color:#c9add8}.dark-theme .nav-lock{color:#b69ac6}
@@ -1175,11 +1175,11 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
   border-radius:inherit;
   pointer-events:none;
 }
-.shell .sidebar .profile{padding:12px 8px;margin-top:12px}
+.shell .sidebar .profile{padding:12px 8px}
 .shell .sidebar .profile[aria-current=page]{border-top-color:transparent}
 .shell .sidebar :is(.dashboard-nav-link,.profile):focus-visible{outline-color:var(--ink)!important}
 @media(max-width:650px){
-  .shell.dashboard-popout .sidebar .profile{padding-inline:0;margin-top:auto}
+  .shell.dashboard-popout .sidebar .profile{padding-inline:0}
 }
 
 .shell.high-contrast{
@@ -1207,6 +1207,8 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
   --bg:#000;
   --light:#181818;
   --line:#fff;
+}
+.shell.high-contrast:is([data-palette=contrast],[data-accent]:not([data-accent=default])){
   --purple:var(--dashboard-accent);
 }
 
@@ -1253,6 +1255,15 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
     border-color:var(--purple)!important;
   }
   .shell.high-contrast :where(svg){color:inherit!important}
+  .shell.high-contrast :where(
+    .page-heading h1,.card-heading h2,.nav-label,.dashboard-nav-link,
+    .profile[aria-current=page],.stat-icon
+  ){
+    --contrast-text:var(--purple);
+  }
+  .shell.high-contrast :where(.topbar,.appearance-palettes){
+    border-bottom:3px solid var(--purple)!important;
+  }
   .shell.high-contrast :where(a:not(.primary,.card,.hero-button,.outline,.quiet,.brand,.profile,.dashboard-nav-link),.text-button){
     --contrast-text:var(--purple);
     text-decoration:underline;
@@ -1271,7 +1282,7 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
     [aria-selected=true],[aria-pressed=true],.chosen,.discord-section-button.active,
     .settings-category-menu > button.active,.appearance-palette-options label:has(input:checked)
   ){
-    outline:2px solid var(--ink)!important;
+    outline:2px solid var(--purple)!important;
     outline-offset:-3px!important;
   }
   .shell.high-contrast :where(:focus-visible,.stream-confirm-switch:has(input:focus-visible)>span,.appearance-palette-options label:has(input:focus-visible)){

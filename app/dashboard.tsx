@@ -113,6 +113,7 @@ const appearanceAccents = [
     { id: 'blue', label: 'High Contrast Blue', light: '#0048ac', dark: '#70c7ff', colours: ['#0048ac', '#70c7ff'] },
     { id: 'green', label: 'High Contrast Green', light: '#176338', dark: '#7dff96', colours: ['#176338', '#7dff96'] },
     { id: 'yellow', label: 'High Contrast Yellow', light: '#735000', dark: '#ffff00', colours: ['#b87f00', '#ffff00'] },
+    { id: 'white', label: 'High Contrast White', light: '#292929', dark: '#ffffff', colours: ['#c5c5c5', '#ffffff'] },
     { id: 'rose', label: 'Rose', light: '#8a2450', dark: '#ffa9ca', colours: ['#f5a9c5', '#d9618d', '#8a2450'] },
     { id: 'lilac', label: 'Lilac', light: '#70469d', dark: '#d2afff', colours: ['#e2cff9', '#af86dc'] },
     { id: 'teal', label: 'Teal', light: '#00675f', dark: '#6ce8d4', colours: ['#a4ecdc', '#268d80'] },
