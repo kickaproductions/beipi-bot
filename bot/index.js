@@ -8,7 +8,7 @@ if(!discordToken)throw new Error('DISCORD_BOT_TOKEN or DISCORD_TOKEN is required
 
 const supabase=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,{auth:{persistSession:false,autoRefreshToken:false}});
 const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMembers,GatewayIntentBits.GuildPresences,GatewayIntentBits.GuildMessages,GatewayIntentBits.GuildMessageReactions,GatewayIntentBits.DirectMessages],partials:[Partials.Message,Partials.Channel,Partials.Reaction]});
-const settings=new Map();const ownerSettings=new Map();const pendingOffline=new Map();const memberQueues=new Map();const activityCooldown=new Map();const activityCleanup=new Map();let confirmationPollRunning=false;
+const settings=new Map();const ownerSettings=new Map();const pendingOffline=new Map();const memberQueues=new Map();const activityCooldown=new Map();const activityCleanup=new Map();let confirmationPollRunning=false;let liveCleanupRunning=false;
 const randomItems=['rubber duck','spatula','traffic cone','emotional-support potato','garden gnome','squeaky hammer','battle spoon','glittery cactus','enchanted teacup','questionable wizard hat'];
 const randomAnimals=['platypus','capybara','penguin','red panda','axolotl','wombat','quokka','tiny goose','sleepy fox','chaotic raccoon'];
 const randomDinosaurs=['tiny triceratops','pocket velociraptor','baby stegosaurus','sparkly brachiosaurus','sleepy ankylosaurus','dramatic T-Rex'];
@@ -165,14 +165,55 @@ function isStreaming(presence){return Boolean(presence?.activities?.some(activit
 function streamActivity(presence){return presence?.activities?.find(activity=>activity.type===ActivityType.Streaming);}
 function renderTemplate(template,member,activity){const item=pick(randomItems),animal=pick(randomAnimals),dinosaur=pick(randomDinosaurs),values={streamer:member.displayName,title:activity?.details||activity?.state||'A new adventure',game:activity?.state||activity?.details||'something exciting',platform:activity?.name||'their stream',url:activity?.url||'',server:member.guild.name,random_item:item,random_animal:animal,random_dinosaur:dinosaur,random_companion:pick([item,animal,dinosaur])};return (template||creatorDefault).replace(/\{([a-z_]+)\}/g,(match,key)=>values[key]??match).replace(/\n{3,}/g,'\n\n').trim().slice(0,1950)}
 
+async function readLiveRules(table){
+ const rows=[];
+ const pageSize=500;
+ for(let offset=0;;offset+=pageSize){
+  const {data,error}=await supabase.from(table).select('*').order('id').range(offset,offset+pageSize-1);
+  if(error)throw error;
+  rows.push(...data);
+  if(data.length<pageSize)return rows;
+ }
+}
+
+let settingsLoadRunning=false;
 async function loadSettings(){
- const [{data,error},{data:owners,error:ownerError}]=await Promise.all([supabase.from('discord_live_settings').select('*'),supabase.from('discord_owner_live_settings').select('*')]);
- if(error){console.error('[settings]',error.message);return}
- if(ownerError&&ownerError.code!=='42P01'){console.error('[owner-settings]',ownerError.message);return}
- settings.clear();for(const row of data||[]){const rules=settings.get(row.guild_id)||[];rules.push(row);settings.set(row.guild_id,rules)}
- ownerSettings.clear();const ownerRows=owners||[],userIds=[...new Set(ownerRows.map(row=>row.user_id))];
- if(userIds.length){const {data:connections,error:connectionError}=await supabase.from('platform_connections').select('user_id,external_user_id').eq('platform','discord').in('user_id',userIds);if(connectionError)console.error('[owner-settings]',connectionError.message);else{const discordByUser=new Map((connections||[]).map(row=>[row.user_id,row.external_user_id]));for(const row of ownerRows){const discordId=discordByUser.get(row.user_id);if(discordId)ownerSettings.set(`${row.guild_id}:${discordId}`,row)}}}
- console.log(`[settings] Loaded ${settings.size} community server(s) and ${ownerSettings.size} personal notification(s).`);
+ if(settingsLoadRunning)return;
+ settingsLoadRunning=true;
+ try{
+  const [communityRows,ownerRows]=await Promise.all([
+   readLiveRules('discord_live_settings'),
+   readLiveRules('discord_owner_live_settings').catch(error=>{
+    if(error.code==='42P01')return [];
+    throw error;
+   }),
+  ]);
+  const discordByUser=new Map();
+  const userIds=[...new Set(ownerRows.map(row=>row.user_id))];
+  for(let offset=0;offset<userIds.length;offset+=100){
+   const {data,error}=await supabase.from('platform_connections').select('user_id,external_user_id')
+    .eq('platform','discord').in('user_id',userIds.slice(offset,offset+100));
+   if(error)throw error;
+   for(const connection of data)discordByUser.set(connection.user_id,connection.external_user_id);
+  }
+
+  settings.clear();
+  for(const row of communityRows){
+   const rules=settings.get(row.guild_id)||[];
+   rules.push(row);
+   settings.set(row.guild_id,rules);
+  }
+  ownerSettings.clear();
+  for(const row of ownerRows){
+   const discordId=discordByUser.get(row.user_id);
+   if(!discordId)continue;
+   const key=`${row.guild_id}:${discordId}`,rules=ownerSettings.get(key)||[];
+   rules.push(row);
+   ownerSettings.set(key,rules);
+  }
+  console.log(`[settings] Loaded ${settings.size} community server(s) and ${ownerRows.length} personal notification(s).`);
+ }catch(error){console.error('[settings]',error.message)}
+ finally{settingsLoadRunning=false}
 }
 
 function serial(key,task){const previous=memberQueues.get(key)||Promise.resolve();const next=previous.catch(()=>{}).then(task).finally(()=>{if(memberQueues.get(key)===next)memberQueues.delete(key)});memberQueues.set(key,next);return next;}
@@ -181,39 +222,124 @@ const matchingCommunityRules=(member,rules=[])=>rules.filter(rule=>rule.discord_
 
 async function postLiveTarget(member,activity,target,existingKeys){
  if(existingKeys.has(target.sourceKey))return false;
- if(target.liveRoleId){const role=member.guild.roles.cache.get(target.liveRoleId);if(!role?.editable){console.warn(`[roles] Cannot manage ${target.liveRoleName||target.liveRoleId} in ${member.guild.name}.`);await logActivity(member.guild.id,'role_error','warning','Could not add the live role',`B.E.I.P.I. cannot manage ${target.liveRoleName||'the configured live role'}.`,{roleId:target.liveRoleId})}else if(!member.roles.cache.has(role.id))await member.roles.add(role,'B.E.I.P.I. detected Discord Streaming activity')}
- const channel=member.guild.channels.cache.get(target.channelId);let message=null;const rendered=renderTemplate(target.template,member,activity);const roleIds=[...new Set((target.roleIds||[]).filter(Boolean))].slice(0,20);const mentions=[target.everyone?'@everyone':'',...roleIds.map(id=>`<@&${id}>`)].filter(Boolean);const content=mentions.length?`${mentions.join(' ')}\n${rendered}`:rendered;
- if(channel?.isTextBased())message=await channel.send({content,allowedMentions:{parse:target.everyone?['everyone']:[],roles:roleIds}});
- else await logActivity(member.guild.id,'alert_error','warning','Live alert channel is unavailable','The configured alert channel could not be found or is not a text channel.',{channelId:target.channelId});
- const {error}=await supabase.from('discord_live_events').upsert({guild_id:member.guild.id,member_id:member.id,source_key:target.sourceKey,message_id:message?.id||null,channel_id:channel?.id||target.channelId,started_at:new Date().toISOString(),updated_at:new Date().toISOString()},{onConflict:'guild_id,member_id,source_key'});
- if(error)console.error('[live-event]',error.message);else existingKeys.add(target.sourceKey);
- return Boolean(message);
+
+ if(target.liveRoleId){
+  try{
+   const role=member.guild.roles.cache.get(target.liveRoleId);
+   if(!role?.editable)throw new Error('Check B.E.I.P.I.’s Manage Roles permission and role position.');
+   if(!member.roles.cache.has(role.id))await member.roles.add(role,'B.E.I.P.I. detected Discord Streaming activity');
+  }catch(error){
+   console.warn('[roles]',error);
+   await logActivity(member.guild.id,'role_error','warning','Could not add the live role',
+    `B.E.I.P.I. could not assign ${target.liveRoleName||'the configured live role'}.`,{roleId:target.liveRoleId}).catch(console.error);
+  }
+ }
+
+ const channel=member.guild.channels.cache.get(target.channelId)||
+  await member.guild.channels.fetch(target.channelId).catch(()=>null);
+ if(!channel?.isTextBased()||typeof channel.send!=='function'){
+  await logActivity(member.guild.id,'alert_error','warning','Live alert channel is unavailable',
+   'The configured alert channel could not be found or cannot receive messages.',{channelId:target.channelId});
+  return false;
+ }
+
+ const rendered=renderTemplate(target.template,member,activity);
+ const roleIds=[...new Set((target.roleIds||[]).filter(Boolean))].slice(0,20);
+ const mentions=[target.everyone?'@everyone':'',...roleIds.map(id=>`<@&${id}>`)].filter(Boolean);
+ const prefix=mentions.length?mentions.join(' ')+'\n':'';
+ const message=await channel.send({
+  content:prefix+rendered.slice(0,2000-prefix.length),
+  allowedMentions:{parse:target.everyone?['everyone']:[],roles:roleIds},
+ });
+ const now=new Date().toISOString();
+ const {error}=await supabase.from('discord_live_events').upsert({
+  guild_id:member.guild.id,member_id:member.id,source_key:target.sourceKey,
+  message_id:message.id,channel_id:channel.id,started_at:now,updated_at:now,
+ },{onConflict:'guild_id,member_id,source_key'});
+ if(error)throw error;
+ existingKeys.add(target.sourceKey);
+ return true;
 }
 
-async function goLive(member,presence,rules=[],personal){
- const community=matchingCommunityRules(member,rules),personalEligible=Boolean(personal?.alert_channel_id);if(!community.length&&!personalEligible)return;
+async function goLive(member,presence,rules=[],personal=[]){
+ const community=matchingCommunityRules(member,rules),personalRules=personal.filter(rule=>rule.alert_channel_id);if(!community.length&&!personalRules.length)return;
  try{
-  const {data:existing,error:existingError}=await supabase.from('discord_live_events').select('source_key').eq('guild_id',member.guild.id).eq('member_id',member.id);if(existingError)throw existingError;
+  const {data:existing,error:existingError}=await supabase.from('discord_live_events').select('source_key').not('message_id','is',null).eq('guild_id',member.guild.id).eq('member_id',member.id);if(existingError)throw existingError;
   const existingKeys=new Set((existing||[]).map(row=>row.source_key)),activity=streamActivity(presence),targets=[];
   for(const rule of community)targets.push({sourceKey:`community:${rule.id}`,channelId:rule.alert_channel_id,template:rule.creator_message_template||creatorDefault,liveRoleId:rule.live_role_id,liveRoleName:rule.live_role_name,roleIds:rule.mention_role_ids||[]});
-  if(personalEligible)targets.push({sourceKey:`personal:${personal.id}`,channelId:personal.alert_channel_id,template:personal.message_template||ownerDefault,everyone:personal.everyone_enabled,roleIds:personal.mention_role_ids?.length?personal.mention_role_ids:(personal.role_id?[personal.role_id]:[])});
-  let sent=0;for(const target of targets)if(await postLiveTarget(member,activity,target,existingKeys))sent+=1;
+  for(const rule of personalRules)targets.push({sourceKey:`personal:${rule.id}`,channelId:rule.alert_channel_id,template:rule.message_template||ownerDefault,everyone:rule.everyone_enabled,roleIds:rule.mention_role_ids?.length?rule.mention_role_ids:(rule.role_id?[rule.role_id]:[])});
+  let sent=0;
+  for(const target of targets){
+   try{
+    if(await postLiveTarget(member,activity,target,existingKeys))sent+=1;
+   }catch(error){
+    console.error('[live-target]',target.sourceKey,error);
+    await logActivity(member.guild.id,'alert_error','error','Live notification failed',
+     error?.message||'Discord rejected the live notification.',{memberId:member.id,channelId:target.channelId,sourceKey:target.sourceKey}).catch(console.error);
+   }
+  }
   if(sent)await logActivity(member.guild.id,'live_started','info','Streamer detected live',`${member.displayName} started streaming on ${activity?.name||'a connected platform'}.`,{memberId:member.id,notificationsSent:sent});
   console.log(`[live] ${member.user.tag} in ${member.guild.name}: ${sent} notification(s)`);
  }catch(error){console.error('[live]',error);await logActivity(member.guild.id,'alert_error','error','Live notification failed',error instanceof Error?error.message:'Discord rejected the live notification.',{memberId:member.id})}
 }
 
-async function finishLive(member,rules=[],personal){
+async function finishLive(member,rules=[],personal=[]){
  try{
   const fresh=await member.guild.members.fetch(member.id).catch(()=>member);if(isStreaming(fresh.presence))return;
-  for(const config of rules){if(!config.live_role_id)continue;const role=member.guild.roles.cache.get(config.live_role_id);if(role?.editable&&fresh.roles.cache.has(role.id))await fresh.roles.remove(role,'B.E.I.P.I. detected the stream ended')}
+  for(const config of rules){if(!config.live_role_id)continue;const role=member.guild.roles.cache.get(config.live_role_id);if(role?.editable&&fresh.roles.cache.has(role.id)){
+   await fresh.roles.remove(role,'B.E.I.P.I. detected the stream ended').catch(async error=>{
+    console.warn('[roles]',error);
+    await logActivity(member.guild.id,'role_error','warning','Could not remove the live role',
+     error?.message||'Discord rejected the role removal.',{roleId:role.id}).catch(console.error);
+   });
+  }}
   const {data:events,error:eventError}=await supabase.from('discord_live_events').select('message_id,channel_id,source_key').eq('guild_id',member.guild.id).eq('member_id',member.id);if(eventError)throw eventError;
-  const ruleBySource=new Map(rules.map(rule=>[`community:${rule.id}`,rule]));
-  for(const event of events||[]){const config=event.source_key?.startsWith('personal:')?personal:ruleBySource.get(event.source_key);if(config?.delete_expired_alert===false||!event.message_id||!event.channel_id)continue;const channel=member.guild.channels.cache.get(event.channel_id);if(channel?.isTextBased()){const message=await channel.messages.fetch(event.message_id).catch(()=>null);if(message)await message.delete().catch(()=>{})}}
-  await supabase.from('discord_live_events').delete().eq('guild_id',member.guild.id).eq('member_id',member.id);
+  const ruleBySource=new Map([
+   ...rules.map(rule=>[`community:${rule.id}`,rule]),
+   ...personal.map(rule=>[`personal:${rule.id}`,rule]),
+  ]);
+  for(const event of events||[]){const config=ruleBySource.get(event.source_key);if(config?.delete_expired_alert===false||!event.message_id||!event.channel_id)continue;const channel=member.guild.channels.cache.get(event.channel_id);if(channel?.isTextBased()){const message=await channel.messages.fetch(event.message_id).catch(()=>null);if(message)await message.delete().catch(()=>{})}}
+  const {error:deleteError}=await supabase.from('discord_live_events').delete().eq('guild_id',member.guild.id).eq('member_id',member.id);
+  if(deleteError)throw deleteError;
   await logActivity(member.guild.id,'live_ended','info','Stream ended',`${member.displayName} is no longer detected as streaming.`,{memberId:member.id});
   console.log(`[offline] ${member.user.tag} in ${member.guild.name}`);
  }catch(error){console.error('[offline]',error);await logActivity(member.guild.id,'role_error','error','Could not finish the live session',error instanceof Error?error.message:'The live role or alert could not be cleaned up.',{memberId:member.id})}
+}
+
+function scheduleLiveCleanup(member){
+ const guildId=member.guild.id,key=`${guildId}:${member.id}`;
+ if(pendingOffline.has(key))return;
+ const timer=setTimeout(()=>{
+  void serial(key,()=>finishLive(member,settings.get(guildId)||[],ownerSettings.get(key)))
+   .finally(()=>{if(pendingOffline.get(key)===timer)pendingOffline.delete(key)});
+ },120000);
+ pendingOffline.set(key,timer);
+}
+
+async function reconcileRecordedLiveSessions(){
+ if(liveCleanupRunning)return;
+ liveCleanupRunning=true;
+ try{
+  const seen=new Set();
+  const pageSize=500;
+  for(let offset=0;;offset+=pageSize){
+   const {data,error}=await supabase.from('discord_live_events')
+    .select('guild_id,member_id').order('id').range(offset,offset+pageSize-1);
+   if(error)throw error;
+   for(const event of data||[]){
+    const key=`${event.guild_id}:${event.member_id}`;
+    if(seen.has(key)||pendingOffline.has(key))continue;
+    seen.add(key);
+    const guild=client.guilds.cache.get(event.guild_id);
+    if(!guild?.available)continue;
+    const member=guild.members.cache.get(event.member_id)||
+     await guild.members.fetch(event.member_id).catch(()=>null);
+    if(member&&!isStreaming(member.presence))scheduleLiveCleanup(member);
+   }
+   if((data?.length||0)<pageSize)break;
+  }
+ }catch(error){console.error('[live-cleanup]',error)}
+ finally{liveCleanupRunning=false}
 }
 
 async function reconcileAll(){
@@ -224,7 +350,7 @@ async function reconcileAll(){
    if(member.user.bot)continue;const personal=ownerSettings.get(`${guild.id}:${member.id}`);if(!matchingCommunityRules(member,rules).length&&!personal)continue;
    const key=`${guild.id}:${member.id}`;
    if(isStreaming(member.presence)){const timer=pendingOffline.get(key);if(timer){clearTimeout(timer);pendingOffline.delete(key)}void serial(key,()=>goLive(member,member.presence,rules,personal))}
-   else if(rules.some(config=>config.live_role_id&&member.roles.cache.has(config.live_role_id))&&!pendingOffline.has(key)){const timer=setTimeout(()=>{pendingOffline.delete(key);void serial(key,()=>finishLive(member,rules,personal))},120000);pendingOffline.set(key,timer)}
+   else if(rules.some(config=>config.live_role_id&&member.roles.cache.has(config.live_role_id)))scheduleLiveCleanup(member)
   }
  }
  for(const [key,personal] of ownerSettings){const [guildId,memberId]=key.split(':');const guild=client.guilds.cache.get(guildId);if(!guild)continue;const member=guild.members.cache.get(memberId);if(!member||member.user.bot||!isStreaming(member.presence))continue;const timer=pendingOffline.get(key);if(timer){clearTimeout(timer);pendingOffline.delete(key)}void serial(key,()=>goLive(member,member.presence,settings.get(guildId)||[],personal))}
@@ -234,13 +360,13 @@ client.on(Events.PresenceUpdate,(oldPresence,newPresence)=>{
  const member=newPresence.member;if(!member)return;const key=`${newPresence.guild.id}:${member.id}`,rules=settings.get(newPresence.guild.id)||[],personal=ownerSettings.get(key),communityEligible=matchingCommunityRules(member,rules).length>0;if(!communityEligible&&!personal)return;
  const streaming=isStreaming(newPresence),wasStreaming=isStreaming(oldPresence);
  if(streaming){const timer=pendingOffline.get(key);if(timer){clearTimeout(timer);pendingOffline.delete(key)}if(!wasStreaming)void serial(key,()=>goLive(member,newPresence,rules,personal));return}
- if(wasStreaming){const timer=setTimeout(()=>{pendingOffline.delete(key);void serial(key,()=>finishLive(member,rules,personal))},120000);pendingOffline.set(key,timer)}
+ if(wasStreaming)scheduleLiveCleanup(member);
 });
 client.on(Events.MessageReactionAdd,(reaction,user)=>void handleReaction(reaction,user,true));
 client.on(Events.MessageReactionRemove,(reaction,user)=>void handleReaction(reaction,user,false));
 client.on(Events.InteractionCreate,interaction=>void handleStreamConfirmation(interaction));
 
-client.once(Events.ClientReady,async ready=>{console.log(`[ready] ${ready.user.tag} is online.`);await Promise.all([...ready.guilds.cache.values()].map(async guild=>{await syncGuild(guild);await logActivity(guild.id,'bot_online','info','B.E.I.P.I. came online','The Discord worker connected successfully.') }));await loadSettings();await reconcileAll();await processStreamConfirmations();setInterval(()=>void loadSettings(),60000).unref();setInterval(()=>void processStreamConfirmations(),60000).unref();setInterval(()=>void reconcileAll(),30000).unref();setInterval(()=>void Promise.all([...client.guilds.cache.values()].map(guild=>syncGuild(guild))),300000).unref()});
+client.once(Events.ClientReady,async ready=>{console.log(`[ready] ${ready.user.tag} is online.`);await Promise.all([...ready.guilds.cache.values()].map(async guild=>{await syncGuild(guild);await logActivity(guild.id,'bot_online','info','B.E.I.P.I. came online','The Discord worker connected successfully.') }));await loadSettings();await reconcileAll();await reconcileRecordedLiveSessions();await processStreamConfirmations();setInterval(()=>void loadSettings(),60000).unref();setInterval(()=>void processStreamConfirmations(),60000).unref();setInterval(()=>void reconcileAll(),30000).unref();setInterval(()=>void reconcileRecordedLiveSessions(),30000).unref();setInterval(()=>void Promise.all([...client.guilds.cache.values()].map(guild=>syncGuild(guild))),300000).unref()});
 client.on(Events.GuildCreate,guild=>void (async()=>{await syncGuild(guild);await logActivity(guild.id,'bot_joined','info','B.E.I.P.I. joined the server','The bot installation was registered.')})());
 client.on(Events.GuildDelete,guild=>void (async()=>{await logActivity(guild.id,'bot_removed','warning','B.E.I.P.I. left the server','The bot is no longer installed.');await syncGuild(guild,false)})());
 client.on(Events.Error,error=>console.error('[discord]',error));
