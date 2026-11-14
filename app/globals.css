@@ -361,10 +361,8 @@ body{font-size:16px}
 .server-activity-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}.server-activity-tools>div{display:flex;gap:5px;flex-wrap:wrap}.server-activity-tools button{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:6px 9px;border:1px solid #4a3a55;border-radius:999px;background:#19141f;color:#c4b9ca;font-size:.75rem}.server-activity-tools button span{min-width:19px;padding:2px 5px;border-radius:999px;background:#30243a;color:#d9cae2;font-size:.66rem}.server-activity-tools button.active{background:#d0b8e3;border-color:#d0b8e3;color:#281d31;font-weight:800}.server-activity-tools button.active span{background:#604a70;color:#fff}.server-activity-tools .clear-resolved{border-color:#65414a;color:#e8aeba;background:#321f26}.server-activity-tools button:disabled{opacity:.45}.server-activity-list>article.resolved{opacity:.67;border-left-color:#756b7c}.server-activity-list>article.resolved>span{color:#aaa0b0}.server-activity-list>article>div{flex:1}.resolve-log{align-self:center;padding:6px 9px;border:1px solid #594667;border-radius:8px;color:#d0b8e3;font-size:.74rem;white-space:nowrap}.resolve-log:hover{background:#30243a}@media(max-width:720px){.server-activity-tools{align-items:stretch;flex-direction:column}.server-activity-tools .clear-resolved{align-self:flex-start}.server-activity-list>article{flex-wrap:wrap}.resolve-log{margin-left:27px}}
 
 /* Dashboard sidebar anchors */
-.shell .brand{flex-shrink:0}
-.shell .nav-label{margin-top:28px}
-.shell nav{flex-shrink:0}
-.shell .profile{margin-top:auto;flex-shrink:0}
+.shell .sidebar :is(.brand,.sidebar-links,.profile){flex-shrink:0}
+.shell .sidebar-links{margin-block:auto;padding-block:16px}
 .shell nav .nav-locked{color:#8e8396}.shell nav .nav-locked:hover{background:#2a2033}.nav-lock{margin-left:auto;color:#a68ab8}.beta-preview-hero .hero-copy{max-width:620px}.beta-preview-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:22px 0}.beta-preview-card{position:relative;display:block;padding:22px;text-decoration:none;transition:transform .15s,border-color .15s}.beta-preview-card:hover{transform:translateY(-2px);border-color:#7a6289}.beta-preview-card h2{font-size:1rem;margin:18px 0 7px}.beta-preview-card p{min-height:43px;color:var(--muted);font-size:.8rem;line-height:1.55}.beta-preview-card small{display:flex;align-items:center;gap:4px;margin-top:18px;color:#a98abe;font-size:.7rem}.beta-preview-lock{position:absolute;right:17px;top:17px;display:flex;align-items:center;gap:5px;padding:5px 7px;border:1px solid var(--line);border-radius:999px;color:#9f85b1;font-size:.62rem;font-weight:700}.beta-preview-strip .outline{display:flex}.dark-theme .beta-preview-card{background:#211a29;border-color:#40334b}.dark-theme .beta-preview-card:hover{border-color:#806c8d}.dark-theme .beta-preview-card p{color:#b9aebf}.dark-theme .beta-preview-lock{border-color:#4a3a55;color:#c9add8}.dark-theme .nav-lock{color:#b69ac6}
 @media(max-width:950px){.beta-preview-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:650px){.beta-preview-grid{grid-template-columns:1fr}.beta-preview-card p{min-height:0}.beta-preview-strip{align-items:flex-start;flex-wrap:wrap}.beta-preview-strip .outline{width:100%;margin-left:0}}
@@ -1014,8 +1012,6 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
   .shell.dashboard-popout .body{margin-left:58px;width:calc(100% - 58px);min-width:0}
   .dashboard-popout .sidebar .brand,.dashboard-popout .sidebar .profile,.dashboard-popout .sidebar .dashboard-nav-link{justify-content:center;padding-inline:4px}
   .dashboard-popout .sidebar .brand>div,.dashboard-popout .sidebar .profile>div:not(.avatar),.dashboard-popout .sidebar .profile>svg,.dashboard-popout .sidebar .nav-label,.dashboard-popout .sidebar :is(.dashboard-nav-text,.count,.nav-lock),.dashboard-popout .mobile-menu{display:none}
-  .dashboard-popout .sidebar nav{margin-top:16px}
-  .dashboard-popout .sidebar .profile{margin-top:auto}
 }
 @media(max-width:650px){
   .dashboard-popout-link span{display:none}
@@ -1158,22 +1154,29 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .live-role-picker strong{white-space:normal;overflow-wrap:anywhere}
 .live-role-picker label:has(input:disabled)>small{color:var(--muted);overflow-wrap:anywhere}
 
-/* The current page has the same shape cue in every palette and sidebar size. */
+/* Share the rounded outline across the current page and hover states. */
 .shell .sidebar{overflow-y:auto;scroll-padding-block:8px}
-.shell .sidebar :is(.dashboard-nav-link,.profile)[aria-current=page]{
+.shell .sidebar :is(.dashboard-nav-link,.profile){
   position:relative;
   border-radius:12px;
+}
+.shell .sidebar :is(.dashboard-nav-link,.profile)[aria-current=page]{
   background:transparent;
   color:var(--ink);
   font-weight:700;
 }
-.shell .sidebar :is(.dashboard-nav-link,.profile)[aria-current=page]::after{
+.shell .sidebar :is(.dashboard-nav-link,.profile)::after{
   content:"";
   position:absolute;
   inset:0;
   border:2px solid currentColor;
   border-radius:inherit;
+  visibility:hidden;
   pointer-events:none;
+}
+.shell .sidebar :is(.dashboard-nav-link,.profile)[aria-current=page]::after{visibility:visible}
+@media(hover:hover){
+  .shell .sidebar :is(.dashboard-nav-link,.profile):hover::after{visibility:visible}
 }
 .shell .sidebar .profile{padding:12px 8px}
 .shell .sidebar .profile[aria-current=page]{border-top-color:transparent}
