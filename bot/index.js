@@ -54,7 +54,7 @@ async function processStreamConfirmations(){
   const activeSettings=(confirmationSettings||[]).filter(row=>!row.holiday_mode||!row.holiday_start||!row.holiday_end||today<row.holiday_start||today>row.holiday_end);if(!activeSettings.length)return;
   const userIds=activeSettings.map(row=>row.user_id),now=new Date(),cutoff=new Date(now.getTime()+60*60*1000);
   const [{data:connections,error:connectionsError},{data:streams,error:streamsError}]=await Promise.all([
-   supabase.from('platform_connections').select('user_id,external_user_id,display_name').eq('platform','discord').in('user_id',userIds),
+   verifiedDiscordConnections(userIds),
    supabase.from('companion_items').select('id,user_id,title,note,due').eq('kind','crew-stream').eq('done',false).in('user_id',userIds).gt('due',now.toISOString()).lte('due',cutoff.toISOString())
   ]);
   if(connectionsError||streamsError){console.error('[stream-confirmations]',connectionsError?.message||streamsError?.message);return}
@@ -70,12 +70,12 @@ async function processStreamConfirmations(){
    const leadMinutes=[15,30,60].includes(Number(config.lead_minutes))?Number(config.lead_minutes):60;
    if(new Date(stream.due).getTime()>now.getTime()+leadMinutes*60*1000)continue;
    const guild=client.guilds.cache.get(config.guild_id);
-   if(!guild){await logActivity(config.guild_id,'stream_confirmation_error','warning','Confirmation server unavailable','B.E.I.P.I. is not connected to the selected Discord server.',{streamId:stream.id});continue}
+   if(config.post_to_discord!==false&&!guild){await logActivity(config.guild_id,'stream_confirmation_error','warning','Confirmation server unavailable','B.E.I.P.I. is not connected to the selected Discord server.',{streamId:stream.id});continue}
    const {error:claimError}=await supabase.from('stream_confirmation_runs').insert({stream_id:stream.id,user_id:stream.user_id,discord_user_id:connection.external_user_id,status:'claiming'});
    if(claimError){if(claimError.code!=='23505')console.error('[stream-confirmations]',claimError.message);continue}
    try{
     const user=await client.users.fetch(connection.external_user_id);
-    const when=discordTimestamp(stream.due),details=streamDetails(stream.note),game=details.game?` playing **${details.game}**`:'',message=await user.send({content:`Hi ${connection.display_name||user.displayName}! Your **${stream.title}** stream${game} on ${streamDestination(details)} is scheduled for <t:${when}:F> (<t:${when}:R>).\n\nYour ${leadMinutes}-minute check-in is here. Are you still going live?`,components:[confirmationButtons(stream.id)]});
+    const when=discordTimestamp(stream.due),details=streamDetails(stream.note),game=details.game?` playing **${details.game}**`:'',message=await user.send({content:`Hi ${user.displayName}! Your **${stream.title}** stream${game} on ${streamDestination(details)} is scheduled for <t:${when}:F> (<t:${when}:R>).\n\nYour ${leadMinutes}-minute check-in is here. Are you still going live?`,allowedMentions:{parse:[]},components:[confirmationButtons(stream.id)]});
     await supabase.from('stream_confirmation_runs').update({status:'pending',dm_message_id:message.id,sent_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('stream_id',stream.id);
     console.log(`[stream-confirmation] Asked ${user.tag} about ${stream.title}.`);
    }catch(error){
@@ -84,21 +84,22 @@ async function processStreamConfirmations(){
     await logActivity(config.guild_id,'stream_confirmation_error','warning','Stream confirmation DM failed',`B.E.I.P.I. could not message ${connection.display_name||'the streamer'}.`,{streamId:stream.id});
    }
   }
- }finally{confirmationPollRunning=false}
+ }catch(error){console.error('[stream-confirmations]',error.message)}
+ finally{confirmationPollRunning=false}
 }
 
 async function handleStreamConfirmation(interaction){
  if(!interaction.isButton()||!interaction.customId.startsWith('stream-confirm:'))return;
  const [,streamId,answer]=interaction.customId.split(':');if(!streamId||!['yes','no'].includes(answer))return;
  const {data:run,error:runError}=await supabase.from('stream_confirmation_runs').select('*').eq('stream_id',streamId).eq('discord_user_id',interaction.user.id).maybeSingle();
- if(runError||!run){await interaction.reply({content:'I could not match this confirmation to your schedule.',ephemeral:true}).catch(()=>{});return}
+ if(runError||!run||run.dm_message_id!==interaction.message.id){await interaction.reply({content:'I could not match this confirmation to your schedule.',ephemeral:true}).catch(()=>{});return}
  if(run.status!=='pending'){await interaction.update({content:interaction.message.content+'\n\nThis stream has already been answered.',components:[]}).catch(()=>{});return}
  await interaction.deferUpdate().catch(()=>{});
  const status=answer==='yes'?'confirmed':'cancelled',respondedAt=new Date().toISOString();
  const {data:updated,error:updateError}=await supabase.from('stream_confirmation_runs').update({status:'claiming',updated_at:respondedAt}).eq('id',run.id).eq('status','pending').select('id').maybeSingle();
  if(updateError||!updated){await interaction.editReply({content:`${interaction.message.content}\n\nThat answer was already received.`,components:[]}).catch(()=>{});return}
  const [{data:stream},{data:config}]=await Promise.all([
-  supabase.from('companion_items').select('title,note,due').eq('id',streamId).maybeSingle(),
+  supabase.from('companion_items').select('title,note,due').eq('id',streamId).eq('user_id',run.user_id).eq('kind','crew-stream').maybeSingle(),
   supabase.from('stream_confirmation_settings').select('*').eq('user_id',run.user_id).maybeSingle()
  ]);
  if(!stream||!config){await supabase.from('stream_confirmation_runs').update({status:'pending',updated_at:new Date().toISOString()}).eq('id',run.id);await interaction.editReply({content:`${interaction.message.content}\n\n**I saved your click, but I could not find the schedule settings. Please try again.**`,components:[confirmationButtons(streamId)]}).catch(()=>{});return}
@@ -109,6 +110,14 @@ async function handleStreamConfirmation(interaction){
   :renderConfirmationMessage(config.cancel_message_template||defaultCancellationMessage,stream,details,config,nextStream);
  if(config.post_to_discord===false){await supabase.from('stream_confirmation_runs').update({status,responded_at:respondedAt,updated_at:new Date().toISOString()}).eq('id',run.id);const resultText=status==='confirmed'?'Perfect — you’re confirmed. I’ll keep this one private.':'Got it — I’ve marked this stream as cancelled and won’t post it in the server.';await interaction.editReply({content:`${interaction.message.content}\n\n**${resultText}**`,components:[]}).catch(()=>{});return}
  try{
+  const guild=client.guilds.cache.get(config.guild_id);
+  const {data:connections,error:verificationError}=await verifiedDiscordConnections([run.user_id]);
+  if(verificationError)throw verificationError;
+  const authorId=connections?.[0]?.external_user_id;
+  const author=guild&&authorId===interaction.user.id?await guild.members.fetch({user:authorId,force:true}).catch(()=>null):null;
+  if(!author?.permissions.has(PermissionFlagsBits.ManageGuild))throw new Error('The connected account must manage the selected Discord server.');
+  const channel=await guild.channels.fetch(config.channel_id).catch(()=>null);
+  if(channel?.guildId!==guild.id||!channel.isTextBased())throw new Error('Choose a channel in the selected Discord server.');
   const message=await client.rest.post(Routes.channelMessages(config.channel_id),{body:{content,allowed_mentions:{parse:[],roles:config.role_id?[config.role_id]:[]}}});
   if(!message?.id)throw new Error('Discord did not return a message ID.');
   await supabase.from('stream_confirmation_runs').update({status,responded_at:respondedAt,announcement_message_id:message.id,updated_at:new Date().toISOString()}).eq('id',run.id);
@@ -151,16 +160,28 @@ async function syncGuild(guild,active=true){
 }
 
 const reactionKey=reaction=>reaction.emoji.id?`${reaction.emoji.name}:${reaction.emoji.id}`:reaction.emoji.name;
+function canManageDiscordRole(author,guild,role){
+ return Boolean(role&&author?.permissions.has([PermissionFlagsBits.ManageGuild,PermissionFlagsBits.ManageRoles])&&
+  (author.id===guild.ownerId||author.roles.highest.comparePositionTo(role)>0));
+}
+
 async function handleReaction(reaction,user,adding){
  if(user.bot)return;
  try{
+  if(reaction.message.partial)await reaction.message.fetch();
   if(reaction.partial)await reaction.fetch();
-  const guild=reaction.message.guild;if(!guild)return;
-  const {data:item,error}=await supabase.from('discord_reaction_role_items').select('role_id,role_name,discord_reaction_menus!inner(message_id,remove_on_unreact,active)').eq('emoji',reactionKey(reaction)).eq('discord_reaction_menus.message_id',reaction.message.id).eq('discord_reaction_menus.active',true).maybeSingle();
+  const guild=reaction.message.guild;if(!guild||reaction.message.author?.id!==client.user?.id)return;
+  const {data:item,error}=await supabase.from('discord_reaction_role_items').select('role_id,role_name,discord_reaction_menus!inner(user_id,message_id,remove_on_unreact,active)').eq('emoji',reactionKey(reaction)).eq('discord_reaction_menus.message_id',reaction.message.id).eq('discord_reaction_menus.guild_id',guild.id).eq('discord_reaction_menus.channel_id',reaction.message.channelId).eq('discord_reaction_menus.active',true).maybeSingle();
   if(error){console.error('[reaction-role]',error.message);return}if(!item)return;
   const menu=Array.isArray(item.discord_reaction_menus)?item.discord_reaction_menus[0]:item.discord_reaction_menus;if(!adding&&!menu?.remove_on_unreact)return;
-  const member=await guild.members.fetch(user.id);const role=guild.roles.cache.get(item.role_id);
+  const {data:connections,error:verificationError}=await verifiedDiscordConnections([menu.user_id]);
+  if(verificationError)throw verificationError;
+  const authorId=connections?.[0]?.external_user_id;
+  const author=authorId?await guild.members.fetch({user:authorId,force:true}).catch(()=>null):null;
+  const role=guild.roles.cache.get(item.role_id);
   if(!role?.editable){await logActivity(guild.id,'reaction_role_error','warning','Reaction role could not be managed',`B.E.I.P.I. cannot manage ${item.role_name||'the selected role'}.`,{roleId:item.role_id,messageId:reaction.message.id});return}
+  if(!canManageDiscordRole(author,guild,role))return;
+  const member=await guild.members.fetch(user.id);
   if(adding)await member.roles.add(role,'B.E.I.P.I. reaction role');else await member.roles.remove(role,'B.E.I.P.I. reaction removed');
  }catch(error){console.error('[reaction-role]',error);const guildId=reaction.message.guildId;if(guildId)await logActivity(guildId,'reaction_role_error','error','Reaction role update failed',error instanceof Error?error.message:'Discord rejected the role update.',{messageId:reaction.message.id})}
 }
@@ -222,6 +243,18 @@ async function requestTwitchData(payload){
  if(!Array.isArray(data))throw new Error('Invalid dashboard Twitch response');
  return data;
 }
+
+async function verifiedDiscordConnections(userIds){
+ const ids=[...new Set(userIds)];
+ const connections=[];
+ try{
+  for(let offset=0;offset<ids.length;offset+=100){
+   const rows=await requestTwitchData({connectionUserIds:ids.slice(offset,offset+100)});
+   connections.push(...rows.filter(row=>row.platform==='discord'));
+  }
+  return {data:connections,error:null};
+ }catch(error){return {data:null,error}}
+}
 function renderTemplate(template,member,activity){const item=pick(randomItems),animal=pick(randomAnimals),dinosaur=pick(randomDinosaurs),values={streamer:member.displayName,title:activity?.details||activity?.state||'A new adventure',game:activity?.state||activity?.details||'something exciting',platform:activity?.name||'their stream',url:activity?.url||'',server:member.guild.name,random_item:item,random_animal:animal,random_dinosaur:dinosaur,random_companion:pick([item,animal,dinosaur])};return (template||creatorDefault).replace(/\{([a-z_]+)\}/g,(match,key)=>values[key]??match).replace(/\n{3,}/g,'\n\n').trim().slice(0,1950)}
 
 async function readLiveRules(table){
@@ -270,26 +303,33 @@ async function loadSettings(){
   }
 
   const verifiedAuthors=new Map();
-  async function authorCanManage(row){
+  async function ruleManager(row){
    const discordId=discordByUser.get(row.user_id);
    const guild=client.guilds.cache.get(row.guild_id);
    if(!discordId||!guild?.available)return false;
    const key=`${row.guild_id}:${discordId}`;
    if(!verifiedAuthors.has(key)){
     const member=guild.members.cache.get(discordId)||await guild.members.fetch(discordId).catch(()=>null);
-    verifiedAuthors.set(key,Boolean(member?.permissions.has(PermissionFlagsBits.ManageGuild)));
+    verifiedAuthors.set(key,member?.permissions.has(PermissionFlagsBits.ManageGuild)?member:null);
    }
    return verifiedAuthors.get(key);
   }
   const nextSettings=new Map(),nextOwnerSettings=new Map();
   for(const row of communityRows){
-   if(!await authorCanManage(row))continue;
+   const manager=await ruleManager(row);
+   if(!manager)continue;
    const rules=nextSettings.get(row.guild_id)||[];
-   rules.push(row);
+   const liveRole=manager.guild.roles.cache.get(row.live_role_id);
+   if(row.live_role_id&&!canManageDiscordRole(manager,manager.guild,liveRole)){
+    await logActivity(row.guild_id,'role_error','warning','Live role needs an authorised manager',
+     'The rule still posts alerts. Its author must be able to manage the selected live role before B.E.I.P.I. can assign it.',
+     {roleId:row.live_role_id});
+    rules.push({...row,live_role_id:null});
+   }else rules.push(row);
    nextSettings.set(row.guild_id,rules);
   }
   for(const row of ownerRows){
-   if(!await authorCanManage(row))continue;
+   if(!await ruleManager(row))continue;
    const key=`${row.guild_id}:${discordByUser.get(row.user_id)}`,rules=nextOwnerSettings.get(key)||[];
    rules.push(row);
    nextOwnerSettings.set(key,rules);

@@ -1,6 +1,6 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {draftSchema} from '@/app/discord-schema';
-import {decryptDiscordSession,DISCORD_SESSION_COOKIE} from '@/app/api/auth/discord/session';
+import {decryptDiscordSession} from '@/app/api/auth/discord/session';
 import {getPlatformConnection} from '@/lib/platform-connections';
 import {createClient} from '@/lib/supabase/server';
 
@@ -11,10 +11,13 @@ type Channel={id:string;name:string;type:number};
 const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'no-store'}});
 
 export async function POST(request:NextRequest){
-  let encrypted=request.cookies.get(DISCORD_SESSION_COOKIE)?.value;
-  if(!encrypted){try{encrypted=(await getPlatformConnection('discord'))?.encrypted_session}catch{}}
+  const supabase=await createClient();
+  const {data:{user}}=await supabase.auth.getUser();
+  if(!user)return json({error:'Sign in to publish to Discord.'},401);
+  let encrypted:string|undefined;
+  try{encrypted=(await getPlatformConnection('discord'))?.encrypted_session}catch{}
   const session=encrypted?decryptDiscordSession(encrypted):null;
-  if(!session)return json({error:'Connect Discord before publishing.'},401);
+  if(!session?.user?.username)return json({error:'Connect Discord before publishing.'},401);
   const parsed=draftSchema.safeParse(await request.json());
   if(!parsed.success)return json({error:parsed.error.issues[0]?.message||'Check the message details.'},400);
   const draft=parsed.data;
@@ -25,8 +28,8 @@ export async function POST(request:NextRequest){
     const guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'});
     if(!guildResponse.ok)return json({error:'Reconnect Discord, then try publishing again.'},401);
     const guilds=await guildResponse.json() as Guild[];
-    const manageGuild=BigInt(32);
-    const allowed=guilds.some(g=>g.id===draft.serverId&&(g.owner||(BigInt(g.permissions)&manageGuild)===manageGuild));
+    const required=BigInt(32)|(draft.type==='reaction'?BigInt(268435456):BigInt(0));
+    const allowed=guilds.some(g=>g.id===draft.serverId&&(g.owner||(BigInt(g.permissions)&BigInt(8))!==BigInt(0)||(BigInt(g.permissions)&required)===required));
     if(!allowed)return json({error:'You must manage this server to publish there.'},403);
 
     let channelId=draft.channelId;
@@ -43,9 +46,15 @@ export async function POST(request:NextRequest){
       channelId=created.id;channelName=created.name;
     }
     if(!channelId)return json({error:'Choose an existing Discord channel first.'},400);
+    if(draft.mode!=='new'){
+      const channelsResponse=await fetch(`https://discord.com/api/guilds/${draft.serverId}/channels`,{headers:{Authorization:`Bot ${botToken}`},cache:'no-store'});
+      if(!channelsResponse.ok)return json({error:'Discord could not verify the selected server’s channels.'},502);
+      const channel=(await channelsResponse.json() as Channel[]).find(option=>option.id===channelId&&(option.type===0||option.type===5));
+      if(!channel)return json({error:'Choose a text or announcement channel in the selected server.'},400);
+      channelName=channel.name;
+    }
     const headers:Record<string,string>={Authorization:`Bot ${botToken}`};let headerMessageId:string|undefined;
     if(draft.bannerId){
-      const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)return json({error:'Sign in again before publishing.'},401);
       const {data:banner}=await supabase.from('discord_banners').select('storage_path,file_name,mime_type').eq('id',draft.bannerId).eq('user_id',user.id).maybeSingle();if(!banner)return json({error:'That banner could not be found. Upload it again.'},404);
       const {data:file,error:fileError}=await supabase.storage.from('discord-banners').download(banner.storage_path);if(fileError||!file)return json({error:'That banner file could not be loaded.'},404);
       const attachment={id:0,filename:banner.file_name};const form=new FormData();form.set('payload_json',JSON.stringify({attachments:[attachment]}));form.set('files[0]',new Blob([await file.arrayBuffer()],{type:banner.mime_type}),banner.file_name);
@@ -60,7 +69,6 @@ export async function POST(request:NextRequest){
     if(!sent.id)return json({error:'Add a banner or some text before publishing.'},400);
     const removePublished=async()=>{await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}`,{method:'DELETE',headers}).catch(()=>{});if(headerMessageId&&headerMessageId!==sent.id)await fetch(`https://discord.com/api/channels/${channelId}/messages/${headerMessageId}`,{method:'DELETE',headers}).catch(()=>{})};
     if(draft.type==='reaction'){
-      const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)return json({error:'Sign in again before publishing.'},401);
       for(const reaction of draft.reactions){
         const reactionResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}/reactions/${encodeURIComponent(reaction.emoji)}/@me`,{method:'PUT',headers:{Authorization:`Bot ${botToken}`},cache:'no-store'});
         if(!reactionResponse.ok){await removePublished();return json({error:`Discord could not add ${reaction.emoji}. Use a standard emoji and check B.E.I.P.I.’s Add Reactions permission.`},400)}

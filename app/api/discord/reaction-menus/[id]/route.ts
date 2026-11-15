@@ -1,9 +1,11 @@
 import {NextRequest} from 'next/server';
 import {createClient} from '@/lib/supabase/server';
+import {decryptDiscordSession} from '@/app/api/auth/discord/session';
 
 import {highestDiscordRole, roleAssignmentRestriction, type DiscordRole} from '@/lib/discord-role-eligibility';
 
 type BotUser={id:string};type GuildMember={roles:string[]};
+type Guild={id:string;owner:boolean;permissions:string};
 export async function PATCH(request:NextRequest,{params}:{params:Promise<{id:string}>}){
  const {id}=await params;const supabase=await createClient();const {data:{user}}=await supabase.auth.getUser();if(!user)return Response.json({error:'Sign in to edit reaction roles.'},{status:401});
  const body=await request.json() as {reactions?:{emoji?:string;roleId?:string;roleName?:string}[];removeOnUnreact?:boolean};const reactions=(body.reactions||[]).map(item=>({emoji:item.emoji?.trim()||'',roleId:item.roleId||'',roleName:item.roleName?.trim()||''}));
@@ -11,6 +13,16 @@ export async function PATCH(request:NextRequest,{params}:{params:Promise<{id:str
  const {data:menu,error:menuError}=await supabase.from('discord_reaction_menus').select('id,guild_id,channel_id,message_id,discord_reaction_role_items(emoji)').eq('id',id).eq('user_id',user.id).eq('active',true).maybeSingle();if(menuError||!menu)return Response.json({error:'That published menu could not be found.'},{status:404});
  const token=process.env.DISCORD_BOT_TOKEN;if(!token)return Response.json({error:'B.E.I.P.I.’s bot token is not configured.'},{status:503});const headers={Authorization:`Bot ${token}`};
  try{
+  const {data:connection}=await supabase.from('platform_connections').select('encrypted_session').eq('user_id',user.id).eq('platform','discord').maybeSingle();
+  const session=connection?.encrypted_session?decryptDiscordSession(connection.encrypted_session):null;
+  if(!session?.user?.username)return Response.json({error:'Reconnect Discord to edit reaction roles.'},{status:401});
+  const guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'});
+  if(!guildResponse.ok)return Response.json({error:'Reconnect Discord so B.E.I.P.I. can check your server permissions.'},{status:401});
+  const required=BigInt(32)|BigInt(268435456);
+  const guild=(await guildResponse.json() as Guild[]).find(g=>g.id===menu.guild_id&&(g.owner||(BigInt(g.permissions)&BigInt(8))!==BigInt(0)||(BigInt(g.permissions)&required)===required));
+  if(!guild)return Response.json({error:'You need Manage Server and Manage Roles in this Discord server.'},{status:403});
+  const channelResponse=await fetch(`https://discord.com/api/channels/${menu.channel_id}`,{headers,cache:'no-store'});
+  if(!channelResponse.ok||(await channelResponse.json() as {guild_id?:string}).guild_id!==menu.guild_id)return Response.json({error:'That channel is outside the selected server or unavailable.'},{status:403});
   const [rolesResponse,botResponse]=await Promise.all([fetch(`https://discord.com/api/guilds/${menu.guild_id}/roles`,{headers,cache:'no-store'}),fetch('https://discord.com/api/users/@me',{headers,cache:'no-store'})]);if(!rolesResponse.ok||!botResponse.ok)return Response.json({error:'B.E.I.P.I. could not verify those Discord roles.'},{status:502});
   const roles=await rolesResponse.json() as DiscordRole[],bot=await botResponse.json() as BotUser;const memberResponse=await fetch(`https://discord.com/api/guilds/${menu.guild_id}/members/${bot.id}`,{headers,cache:'no-store'});if(!memberResponse.ok)return Response.json({error:'B.E.I.P.I. could not check her role position.'},{status:502});const member=await memberResponse.json() as GuildMember;const botTop=highestDiscordRole(roles,member.roles);const allowed=new Set(roles.filter(role=>!roleAssignmentRestriction(role,menu.guild_id,botTop)).map(role=>role.id));if(reactions.some(item=>!allowed.has(item.roleId)))return Response.json({error:'One of those roles cannot be assigned by B.E.I.P.I. Check the reason next to its name.'},{status:400});
   for(const old of menu.discord_reaction_role_items||[])await fetch(`https://discord.com/api/channels/${menu.channel_id}/messages/${menu.message_id}/reactions/${encodeURIComponent(old.emoji)}/@me`,{method:'DELETE',headers,cache:'no-store'}).catch(()=>{});
