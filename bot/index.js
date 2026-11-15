@@ -265,7 +265,7 @@ async function postLiveTarget(member,activity,target,existingKeys){
 async function goLive(member,presence,rules=[],personal=[]){
  const community=matchingCommunityRules(member,rules),personalRules=personal.filter(rule=>rule.alert_channel_id);if(!community.length&&!personalRules.length)return;
  try{
-  const {data:existing,error:existingError}=await supabase.from('discord_live_events').select('source_key').not('message_id','is',null).eq('guild_id',member.guild.id).eq('member_id',member.id);if(existingError)throw existingError;
+  const {data:existing,error:existingError}=await supabase.from('discord_live_events').select('source_key,channel_id').not('message_id','is',null).eq('guild_id',member.guild.id).eq('member_id',member.id);if(existingError)throw existingError;
   const existingKeys=new Set((existing||[]).map(row=>row.source_key));
   const hasPersonalAlert=[...existingKeys].some(key=>key.startsWith('personal:'));
   const hasCommunityAlert=[...existingKeys].some(key=>key.startsWith('community:'));
@@ -278,7 +278,15 @@ async function goLive(member,presence,rules=[],personal=[]){
   }
   // Settings can change mid-stream. Keep the already-announced stream on its original route.
   if(!hasCommunityAlert||hasPersonalAlert){
-   for(const rule of personalRules)targets.push({sourceKey:`personal:${rule.id}`,channelId:rule.alert_channel_id,template:rule.message_template||ownerDefault,everyone:rule.everyone_enabled,roleIds:rule.mention_role_ids?.length?rule.mention_role_ids:(rule.role_id?[rule.role_id]:[])});
+   const postedChannels=new Set((existing||[]).filter(event=>event.source_key.startsWith('personal:')).map(event=>event.channel_id));
+   const personalByChannel=new Map();
+   for(const rule of personalRules){
+    if(postedChannels.has(rule.alert_channel_id))continue;
+    const selected=personalByChannel.get(rule.alert_channel_id);
+    // Use the most recently saved rule when multiple rules point to the same channel.
+    if(!selected||Date.parse(rule.updated_at)>Date.parse(selected.updated_at))personalByChannel.set(rule.alert_channel_id,rule);
+   }
+   for(const rule of personalByChannel.values())targets.push({sourceKey:`personal:${rule.id}`,channelId:rule.alert_channel_id,template:rule.message_template||ownerDefault,everyone:rule.everyone_enabled,roleIds:rule.mention_role_ids?.length?rule.mention_role_ids:(rule.role_id?[rule.role_id]:[])});
   }
   let sent=0;
   for(const target of targets){
