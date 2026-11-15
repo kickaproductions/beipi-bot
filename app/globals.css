@@ -774,20 +774,12 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
   color:#68448a;
 }
 
-/* The legal footer is a sibling of the dashboard shell, so inherit its theme
-   through the shared layout wrapper rather than forcing the dark palette. */
-#main-content:has(.shell.light-theme)>.site-legal-footer{
-  border-top-color:#e4dbea;
-  background:#fff;
-  color:#746a7d;
-}
-#main-content:has(.shell.light-theme)>.site-legal-footer a{
-  color:#68448a;
-  text-decoration-color:#8058b766;
-}
-#main-content:has(.shell.light-theme)>.site-legal-footer a:hover{
-  color:#45265e;
-}
+/* The dashboard footer shares the shell's background and theme. */
+#main-content:has(> .shell) > .site-legal-footer{display:none}
+.shell .body{display:flex;flex-direction:column}
+.shell .body>main{width:100%;flex:1}
+.shell .site-legal-footer,.shell .site-legal-footer a{color:var(--ink)}
+.shell .site-legal-footer a{text-decoration-color:currentColor}
 
 /* Shared-space invitations follow light mode instead of forcing dark cards. */
 .light-theme .shared-invite-card,
@@ -1043,12 +1035,6 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
   to{transform:translate3d(var(--confetti-drift),105vh,0) rotate(var(--confetti-spin));opacity:0}
 }
 
-.shell[data-palette] .topbar{
-  background-image:var(--palette-band);
-  background-position:bottom;
-  background-repeat:no-repeat;
-  background-size:100% 8px;
-}
 .appearance-palettes{
   min-inline-size:0;
   margin:0 0 20px;
@@ -1068,9 +1054,21 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .appearance-palette-options input{margin:0;accent-color:var(--purple)}
 .appearance-swatch{grid-column:1/-1;height:44px;border:1px solid var(--line);border-radius:5px;background:var(--preview-band)}
 .appearance-swatch.no-background{background:none;border-style:dashed}
-.shell[data-palette]:not(.high-contrast){--palette-fill:25%}
-.shell[data-palette=light]:not(.high-contrast){background:#f4f0f8}
+.shell[data-palette]:not(.high-contrast){
+  --palette-fill:25%;
+  background:var(--bg) var(--palette-wash) no-repeat fixed;
+}
+.shell[data-palette=light]:not(.high-contrast){--bg:#f4f0f8}
 .shell.dark-theme[data-palette]:not(.high-contrast){--palette-fill:22%}
+.shell[data-palette]:not(.high-contrast) :is(.sidebar,.topbar,.site-legal-footer){
+  background:none;
+  border-color:transparent;
+}
+@media(max-width:650px){
+  .shell[data-palette]:not(.high-contrast) .sidebar.visible{
+    background:var(--bg) var(--palette-wash) no-repeat fixed;
+  }
+}
 .shell[data-accent]:not([data-accent=default],.high-contrast){--purple:var(--dashboard-accent)}
 .shell[data-accent]:not([data-accent=default],.high-contrast) :is(.primary,.completed .check){
   background:var(--purple);
@@ -1090,15 +1088,6 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .shell.dark-theme[data-accent]:not([data-accent=default],.high-contrast){
   --accent-wash:9%;
   --accent-fill:17%;
-}
-.shell[data-accent]:not([data-accent=default],.high-contrast) .sidebar{
-  background:var(--palette-sidebar) right / 6px 100% no-repeat,var(--light);
-  border-color:var(--accent-edge);
-}
-.shell[data-accent]:not([data-accent=default],.high-contrast) .topbar{
-  background-color:var(--light);
-  background-size:100% 10px;
-  border-color:var(--accent-edge);
 }
 .shell[data-accent]:not([data-accent=default],.high-contrast) :is(.crumb strong,.dashboard-nav-link:not(.active),.discord-section-button.active strong,.settings-category-menu>button.active strong){color:var(--ink)}
 .shell[data-accent]:not([data-accent=default],.high-contrast) .dashboard-nav-link:not(.active):hover{background:var(--accent-panel)}
@@ -1125,22 +1114,12 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 }
 .shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast){--palette-fill:36%}
 .shell.dark-theme:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast){--palette-fill:25%}
-.shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast) :is(.sidebar,.topbar){
-  background:var(--bg) var(--palette-wash) no-repeat fixed;
-  border-color:transparent;
-}
-.shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast) :is(.hero,.analytics-preview){
-  background:var(--palette-band) top / 100% 7px no-repeat,var(--palette-wash);
-}
 .shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast) :is(.home-grid,.stream-overview-grid)>:nth-child(2),
 .shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast) .stats>:nth-child(2){
   --light:color-mix(in srgb,var(--palette-middle) var(--palette-fill),var(--bg));
 }
 .shell:is([data-accent=pastel],[data-accent=rainbow]):not(.high-contrast) .stats>:nth-child(3){
   --light:color-mix(in srgb,var(--palette-last) var(--palette-fill),var(--bg));
-}
-@media(max-width:650px){
-  .shell.dashboard-popout[data-palette] .topbar{padding-bottom:18px}
 }
 
 .live-role-picker label{min-width:0}

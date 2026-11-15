@@ -4,6 +4,7 @@ import { House, Bell, ClipboardCheck, Lightbulb, Link2, Users, UserPlus, Plus, A
 import DiscordSetup from './discord-setup';
 import MyCrew, { streamDetails } from './my-crew';
 import StreamGameArt from './stream-game-art';
+import SiteLegalFooter from './site-legal-footer';
 import { dashboardPaths, dashboardViewFromPath, type DashboardView as View } from '@/lib/dashboard-sections';
 import { createClient } from '@/lib/supabase/client';
 type Item = {
@@ -185,15 +186,11 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     const dark = highContrast || base === 'dark';
     const selectedAccent = appearanceAccents.find(option => option.id === accent) ?? appearanceAccents[0];
     const accentColour = dark ? selectedAccent.dark : selectedAccent.light;
-    const bannerColours = accent === 'default'
-        ? (appearanceBases.find(option => option.id === base) ?? appearanceBases[1]).colours
-        : selectedAccent.colours;
+    const bannerColours = selectedAccent.colours;
     const paletteStyle = {
         '--dashboard-text-scale': textSize / DEFAULT_TEXT_SIZE,
         '--dashboard-accent': accentColour,
         '--dashboard-contrast-accent': contrastColours.find(option => option.id === contrastColour)?.colour ?? contrastColours[0].colour,
-        '--palette-band': paletteBand(bannerColours),
-        '--palette-sidebar': paletteBand(bannerColours, '180deg'),
         '--palette-wash': paletteBand(bannerColours.map(colour =>
             `color-mix(in srgb, ${colour} var(--palette-fill), var(--bg))`), '110deg'),
         '--palette-middle': bannerColours[Math.floor(bannerColours.length / 2)],
@@ -598,7 +595,7 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
  {view === 'Account settings' && settingsTab === 'accessibility' && <aside className="accessibility-contact card"><MessageSquareText size={20}/><div><strong>Is there something we could add?</strong><p>Accessibility needs are personal, and we want to keep learning. Tell us what would make B.E.I.P.I. easier for you at <a href="mailto:kickaa@beipi.app">kickaa@beipi.app</a>.</p></div></aside>}
  </>}
  <footer><span><Heart size={13}/> Made for brains with a few extra tabs open.</span><span>B.E.I.P.I · The streamer’s companion</span></footer>
- </main></div>{toast && <div className="toast" role="status">
+ </main><SiteLegalFooter/></div>{toast && <div className="toast" role="status">
     <Check size={17} aria-hidden="true"/>
     {toast}
  </div>}
