@@ -1,4 +1,4 @@
-import {ActionRowBuilder,ActivityType,ButtonBuilder,ButtonStyle,Client,Events,GatewayIntentBits,Partials,Routes} from 'discord.js';
+import {ActionRowBuilder,ActivityType,ButtonBuilder,ButtonStyle,Client,Events,GatewayIntentBits,Partials,PermissionFlagsBits,Routes} from 'discord.js';
 import {createClient} from '@supabase/supabase-js';
 import {createHmac} from 'node:crypto';
 
@@ -12,6 +12,7 @@ const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.Gui
 const settings=new Map();const ownerSettings=new Map();const pendingOffline=new Map();const memberQueues=new Map();const activityCooldown=new Map();const activityCleanup=new Map();let confirmationPollRunning=false;let liveCleanupRunning=false;
 const twitchByMember=new Map();
 const twitchStreams=new Map();
+const missingTwitchMembers=new Map();
 const randomItems=['rubber duck','spatula','traffic cone','emotional-support potato','garden gnome','squeaky hammer','battle spoon','glittery cactus','enchanted teacup','questionable wizard hat'];
 const randomAnimals=['platypus','capybara','penguin','red panda','axolotl','wombat','quokka','tiny goose','sleepy fox','chaotic raccoon'];
 const randomDinosaurs=['tiny triceratops','pocket velociraptor','baby stegosaurus','sparkly brachiosaurus','sleepy ankylosaurus','dramatic T-Rex'];
@@ -164,20 +165,32 @@ async function handleReaction(reaction,user,adding){
  }catch(error){console.error('[reaction-role]',error);const guildId=reaction.message.guildId;if(guildId)await logActivity(guildId,'reaction_role_error','error','Reaction role update failed',error instanceof Error?error.message:'Discord rejected the role update.',{messageId:reaction.message.id})}
 }
 
-function streamActivity(member,presence=member.presence){
- const twitchId=twitchByMember.get(`${member.guild.id}:${member.id}`);
- const status=twitchStreams.get(twitchId);
- if(status?.activity&&Date.now()-status.checkedAt<=90_000)return status.activity;
+function watchesTwitch(member){
+ return ownerSettings.has(`${member.guild.id}:${member.id}`)||
+  matchingCommunityRules(member,settings.get(member.guild.id),{discord:false}).length>0;
+}
+
+function twitchStatusFor(member){
+ return twitchStreams.get(twitchByMember.get(member.id));
+}
+
+function discordStreamActivity(member,presence=member.presence){
  const discordActivity=presence?.activities?.find(activity=>activity.type===ActivityType.Streaming);
- if(status&&discordActivity&&(discordActivity.name?.toLowerCase()==='twitch'||/^https:\/\/(?:www\.)?twitch\.tv\//i.test(discordActivity.url||'')))return;
+ const isTwitch=discordActivity&&(discordActivity.name?.toLowerCase()==='twitch'||/^https:\/\/(?:www\.)?twitch\.tv\//i.test(discordActivity.url||''));
+ if(isTwitch&&watchesTwitch(member)&&twitchStatusFor(member)?.activity===null)return;
  return discordActivity;
 }
 
+function streamActivity(member,presence=member.presence){
+ const status=twitchStatusFor(member);
+ if(status?.activity&&Date.now()-status.checkedAt<=90_000&&watchesTwitch(member))return status.activity;
+ return discordStreamActivity(member,presence);
+}
+
 function canFinishLive(member){
- const twitchId=twitchByMember.get(`${member.guild.id}:${member.id}`);
- const status=twitchStreams.get(twitchId);
+ const status=twitchStatusFor(member);
  // An unavailable or stale Twitch lookup is different from a confirmed offline stream.
- if(twitchId&&(!status||Date.now()-status.checkedAt>90_000))return false;
+ if(twitchByMember.has(member.id)&&watchesTwitch(member)&&(!status||Date.now()-status.checkedAt>90_000))return false;
  return !streamActivity(member);
 }
 
@@ -197,7 +210,7 @@ async function pollTwitch(){
    if(!response.ok)throw new Error(`Dashboard Twitch lookup returned ${response.status}`);
    const streams=await response.json();
    if(!Array.isArray(streams)||streams.some(stream=>!stream||stream.name!=='Twitch'||!batch.includes(stream.id)))throw new Error('Invalid Twitch status response');
-   const liveById=new Map(streams.map(stream=>[stream.id,stream]));
+   const liveById=new Map(streams.map(stream=>[stream.id,{...stream,twitchConfirmed:true}]));
    const checkedAt=Date.now();
    for(const id of batch)twitchStreams.set(id,{activity:liveById.get(id)??null,checkedAt});
   }catch(error){console.warn('[twitch-live]',error.message)}
@@ -229,10 +242,23 @@ async function loadSettings(){
    }),
   ]);
   const discordByUser=new Map(),twitchByUser=new Map();
-  const userIds=[...new Set(ownerRows.map(row=>row.user_id))];
+  const ruleUsers=new Set([...ownerRows,...communityRows].map(row=>row.user_id));
+  const communityTwitchEnabled=communityRows.some(rule=>rule.platform_confirmation_enabled);
+  if(communityTwitchEnabled){
+   const pageSize=500;
+   for(let offset=0;;offset+=pageSize){
+    const {data,error}=await supabase.from('platform_connections').select('user_id,external_user_id')
+     .eq('platform','twitch').order('id').range(offset,offset+pageSize-1);
+    if(error)throw error;
+    for(const row of data)twitchByUser.set(row.user_id,row.external_user_id);
+    if(data.length<pageSize)break;
+   }
+  }
+  const userIds=[...new Set([...ruleUsers,...twitchByUser.keys()])];
   for(let offset=0;offset<userIds.length;offset+=100){
    const {data,error}=await supabase.from('platform_connections').select('user_id,platform,external_user_id')
-    .in('platform',['discord','twitch']).in('user_id',userIds.slice(offset,offset+100));
+    .in('platform',communityTwitchEnabled?['discord']:['discord','twitch'])
+    .in('user_id',userIds.slice(offset,offset+100));
    if(error)throw error;
    for(const connection of data){
     const connections=connection.platform==='twitch'?twitchByUser:discordByUser;
@@ -240,38 +266,57 @@ async function loadSettings(){
    }
   }
 
-  settings.clear();
-  for(const row of communityRows){
-   const rules=settings.get(row.guild_id)||[];
-   rules.push(row);
-   settings.set(row.guild_id,rules);
-  }
-  ownerSettings.clear();
-  twitchByMember.clear();
-  for(const row of ownerRows){
+  const verifiedAuthors=new Map();
+  async function authorCanManage(row){
    const discordId=discordByUser.get(row.user_id);
-   if(!discordId)continue;
-   const key=`${row.guild_id}:${discordId}`,rules=ownerSettings.get(key)||[];
-   rules.push(row);
-   ownerSettings.set(key,rules);
-   const twitchId=twitchByUser.get(row.user_id);
-   if(twitchId&&/^\d{1,20}$/.test(twitchId))twitchByMember.set(key,twitchId);
+   const guild=client.guilds.cache.get(row.guild_id);
+   if(!discordId||!guild?.available)return false;
+   const key=`${row.guild_id}:${discordId}`;
+   if(!verifiedAuthors.has(key)){
+    const member=guild.members.cache.get(discordId)||await guild.members.fetch(discordId).catch(()=>null);
+    verifiedAuthors.set(key,Boolean(member?.permissions.has(PermissionFlagsBits.ManageGuild)));
+   }
+   return verifiedAuthors.get(key);
   }
-  console.log(`[settings] Loaded ${settings.size} community server(s) and ${ownerRows.length} personal notification(s).`);
+  const nextSettings=new Map(),nextOwnerSettings=new Map();
+  for(const row of communityRows){
+   if(!await authorCanManage(row))continue;
+   const rules=nextSettings.get(row.guild_id)||[];
+   rules.push(row);
+   nextSettings.set(row.guild_id,rules);
+  }
+  for(const row of ownerRows){
+   if(!await authorCanManage(row))continue;
+   const key=`${row.guild_id}:${discordByUser.get(row.user_id)}`,rules=nextOwnerSettings.get(key)||[];
+   rules.push(row);
+   nextOwnerSettings.set(key,rules);
+  }
+  settings.clear();
+  for(const [key,rules] of nextSettings)settings.set(key,rules);
+  ownerSettings.clear();
+  for(const [key,rules] of nextOwnerSettings)ownerSettings.set(key,rules);
+  twitchByMember.clear();
+  for(const [userId,twitchId] of twitchByUser){
+   const discordId=discordByUser.get(userId);
+   if(discordId&&twitchId&&/^\d{1,20}$/.test(twitchId))twitchByMember.set(discordId,twitchId);
+  }
+  console.log(`[settings] Loaded community rules for ${settings.size} server(s) and personal rules for ${ownerSettings.size} member/server pair(s).`);
  }catch(error){console.error('[settings]',error.message)}
  finally{settingsLoadRunning=false}
 }
 
 function serial(key,task){const previous=memberQueues.get(key)||Promise.resolve();const next=previous.catch(()=>{}).then(task).finally(()=>{if(memberQueues.get(key)===next)memberQueues.delete(key)});memberQueues.set(key,next);return next;}
 
-const matchingCommunityRules=(member,rules=[])=>rules.filter(rule=>rule.discord_presence_enabled&&(!rule.creator_role_id||member.roles.cache.has(rule.creator_role_id)));
+const matchingCommunityRules=(member,rules=[],{discord=true,twitch=true}={})=>rules.filter(rule=>
+ ((discord&&rule.discord_presence_enabled)||(twitch&&rule.platform_confirmation_enabled))&&
+ (!rule.creator_role_id||member.roles.cache.has(rule.creator_role_id)));
 
 async function assignLiveRole(member,rule){
  if(!rule.live_role_id||member.roles.cache.has(rule.live_role_id))return;
  try{
   const role=member.guild.roles.cache.get(rule.live_role_id);
   if(!role?.editable)throw new Error('Check B.E.I.P.I.’s Manage Roles permission and role position.');
-  await member.roles.add(role,'B.E.I.P.I. detected Discord Streaming activity');
+  await member.roles.add(role,'B.E.I.P.I. detected a live stream');
  }catch(error){
   console.warn('[roles]',error);
   await logActivity(member.guild.id,'role_error','warning','Could not add the live role',
@@ -284,9 +329,22 @@ async function postLiveTarget(member,activity,target,existingKeys){
 
  const channel=member.guild.channels.cache.get(target.channelId)||
   await member.guild.channels.fetch(target.channelId).catch(()=>null);
- if(!channel?.isTextBased()||typeof channel.send!=='function'){
+ if(channel?.guildId!==member.guild.id||!channel?.isTextBased()||typeof channel.send!=='function'){
   await logActivity(member.guild.id,'alert_error','warning','Live alert channel is unavailable',
    'The configured alert channel could not be found or cannot receive messages.',{channelId:target.channelId});
+  return false;
+ }
+
+ const botMember=member.guild.members.me||await member.guild.members.fetchMe().catch(()=>null);
+ const permissions=botMember?channel.permissionsFor(botMember):null;
+ const missing=[
+  [PermissionFlagsBits.ViewChannel,'View Channel'],
+  [PermissionFlagsBits.SendMessages,'Send Messages'],
+ ].filter(([flag])=>!permissions?.has(flag)).map(([,label])=>label);
+ if(missing.length){
+  await logActivity(member.guild.id,'alert_error','warning','Live alert lacks channel permissions',
+   `Allow B.E.I.P.I. ${missing.join(' and ')} in #${channel.name}.`,
+   {memberId:member.id,channelId:channel.id,sourceKey:target.sourceKey});
   return false;
  }
 
@@ -309,7 +367,12 @@ async function postLiveTarget(member,activity,target,existingKeys){
 }
 
 async function goLive(member,activity,rules=[],personal=[]){
- const community=matchingCommunityRules(member,rules),personalRules=personal.filter(rule=>rule.alert_channel_id);if(!community.length&&!personalRules.length)return;
+ const community=matchingCommunityRules(member,rules,{
+  discord:Boolean(discordStreamActivity(member)),
+  twitch:activity.twitchConfirmed===true,
+ });
+ const personalRules=personal.filter(rule=>rule.alert_channel_id);
+ if(!community.length&&!personalRules.length)return;
  try{
   const {data:existing,error:existingError}=await supabase.from('discord_live_events').select('source_key,channel_id').not('message_id','is',null).eq('guild_id',member.guild.id).eq('member_id',member.id);if(existingError)throw existingError;
   const existingKeys=new Set((existing||[]).map(row=>row.source_key));
@@ -421,15 +484,36 @@ function queueLive(member,rules,personal){
  });
 }
 
+async function findLiveTwitchMembers(guild,liveMemberIds){
+ const ids=liveMemberIds.filter(id=>!guild.members.cache.has(id)&&!missingTwitchMembers.has(`${guild.id}:${id}`));
+ for(let offset=0;offset<ids.length;offset+=100){
+  const batch=ids.slice(offset,offset+100);
+  try{
+   const found=await guild.members.fetch({user:batch,time:5_000});
+   const retryAt=Date.now()+5*60_000;
+   for(const id of batch)if(!found.has(id))missingTwitchMembers.set(`${guild.id}:${id}`,retryAt);
+  }catch(error){
+   console.warn('[twitch-members]',guild.id,error.message);
+  }
+ }
+}
+
 let reconcileRunning=false;
 async function reconcileAll(){
  if(reconcileRunning)return;
  reconcileRunning=true;
  try{
   await pollTwitch();
+  const now=Date.now();
+  const liveMemberIds=[...twitchByMember].filter(([,id])=>{
+   const status=twitchStreams.get(id);
+   return status?.activity&&now-status.checkedAt<=90_000;
+  }).map(([id])=>id);
+  for(const [key,retryAt] of missingTwitchMembers)if(retryAt<=now)missingTwitchMembers.delete(key);
   for(const [guildId,rules] of settings){
    const guild=client.guilds.cache.get(guildId);
    if(!guild?.available)continue;
+   if(rules.some(rule=>rule.platform_confirmation_enabled))await findLiveTwitchMembers(guild,liveMemberIds);
    for(const member of guild.members.cache.values()){
     const key=`${guild.id}:${member.id}`;
     if(member.user.bot||ownerSettings.has(key)||!matchingCommunityRules(member,rules).length)continue;
@@ -441,7 +525,7 @@ async function reconcileAll(){
    const [guildId,memberId]=key.split(':');
    const guild=client.guilds.cache.get(guildId);
    if(!guild?.available)continue;
-   const twitchStatus=twitchStreams.get(twitchByMember.get(key));
+   const twitchStatus=twitchStreams.get(twitchByMember.get(memberId));
    const member=guild.members.cache.get(memberId)||
     (twitchStatus?.activity&&Date.now()-twitchStatus.checkedAt<=90_000
      ? await guild.members.fetch(memberId).catch(()=>null)
