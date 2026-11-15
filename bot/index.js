@@ -53,35 +53,35 @@ async function processStreamConfirmations(){
   const today=new Date().toISOString().slice(0,10);
   const activeSettings=(confirmationSettings||[]).filter(row=>!row.holiday_mode||!row.holiday_start||!row.holiday_end||today<row.holiday_start||today>row.holiday_end);if(!activeSettings.length)return;
   const userIds=activeSettings.map(row=>row.user_id),now=new Date(),cutoff=new Date(now.getTime()+60*60*1000);
-  const [{data:connections,error:connectionsError},{data:streams,error:streamsError}]=await Promise.all([
-   verifiedDiscordConnections(userIds),
+  const [{discord:discordByUser},{data:streams,error:streamsError}]=await Promise.all([
+   verifiedPlatformConnections(userIds),
    supabase.from('companion_items').select('id,user_id,title,note,due').eq('kind','crew-stream').eq('done',false).in('user_id',userIds).gt('due',now.toISOString()).lte('due',cutoff.toISOString())
   ]);
-  if(connectionsError||streamsError){console.error('[stream-confirmations]',connectionsError?.message||streamsError?.message);return}
+  if(streamsError)throw streamsError;
   if(!streams?.length)return;
   const {data:existing,error:runsError}=await supabase.from('stream_confirmation_runs').select('stream_id').in('stream_id',streams.map(row=>row.id));
   if(runsError){console.error('[stream-confirmations]',runsError.message);return}
-  const sent=new Set((existing||[]).map(row=>row.stream_id)),connectionByUser=new Map((connections||[]).map(row=>[row.user_id,row]));
+  const sent=new Set((existing||[]).map(row=>row.stream_id));
   for(const stream of streams){
    if(sent.has(stream.id))continue;
    if(streamDetails(stream.note).discordReminder===false)continue;
-   const config=activeSettings.find(row=>row.user_id===stream.user_id),connection=connectionByUser.get(stream.user_id);
-   if(!config||!connection?.external_user_id)continue;
+   const config=activeSettings.find(row=>row.user_id===stream.user_id),discordId=discordByUser.get(stream.user_id);
+   if(!config||!discordId)continue;
    const leadMinutes=[15,30,60].includes(Number(config.lead_minutes))?Number(config.lead_minutes):60;
    if(new Date(stream.due).getTime()>now.getTime()+leadMinutes*60*1000)continue;
    const guild=client.guilds.cache.get(config.guild_id);
    if(config.post_to_discord!==false&&!guild){await logActivity(config.guild_id,'stream_confirmation_error','warning','Confirmation server unavailable','B.E.I.P.I. is not connected to the selected Discord server.',{streamId:stream.id});continue}
-   const {error:claimError}=await supabase.from('stream_confirmation_runs').insert({stream_id:stream.id,user_id:stream.user_id,discord_user_id:connection.external_user_id,status:'claiming'});
+   const {error:claimError}=await supabase.from('stream_confirmation_runs').insert({stream_id:stream.id,user_id:stream.user_id,discord_user_id:discordId,status:'claiming'});
    if(claimError){if(claimError.code!=='23505')console.error('[stream-confirmations]',claimError.message);continue}
    try{
-    const user=await client.users.fetch(connection.external_user_id);
+    const user=await client.users.fetch(discordId);
     const when=discordTimestamp(stream.due),details=streamDetails(stream.note),game=details.game?` playing **${details.game}**`:'',message=await user.send({content:`Hi ${user.displayName}! Your **${stream.title}** stream${game} on ${streamDestination(details)} is scheduled for <t:${when}:F> (<t:${when}:R>).\n\nYour ${leadMinutes}-minute check-in is here. Are you still going live?`,allowedMentions:{parse:[]},components:[confirmationButtons(stream.id)]});
     await supabase.from('stream_confirmation_runs').update({status:'pending',dm_message_id:message.id,sent_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('stream_id',stream.id);
     console.log(`[stream-confirmation] Asked ${user.tag} about ${stream.title}.`);
    }catch(error){
     await supabase.from('stream_confirmation_runs').delete().eq('stream_id',stream.id);
     console.error('[stream-confirmation-dm]',error);
-    await logActivity(config.guild_id,'stream_confirmation_error','warning','Stream confirmation DM failed',`B.E.I.P.I. could not message ${connection.display_name||'the streamer'}.`,{streamId:stream.id});
+    await logActivity(config.guild_id,'stream_confirmation_error','warning','Stream confirmation DM failed','B.E.I.P.I. could not message the streamer.',{streamId:stream.id});
    }
   }
  }catch(error){console.error('[stream-confirmations]',error.message)}
@@ -111,9 +111,8 @@ async function handleStreamConfirmation(interaction){
  if(config.post_to_discord===false){await supabase.from('stream_confirmation_runs').update({status,responded_at:respondedAt,updated_at:new Date().toISOString()}).eq('id',run.id);const resultText=status==='confirmed'?'Perfect — you’re confirmed. I’ll keep this one private.':'Got it — I’ve marked this stream as cancelled and won’t post it in the server.';await interaction.editReply({content:`${interaction.message.content}\n\n**${resultText}**`,components:[]}).catch(()=>{});return}
  try{
   const guild=client.guilds.cache.get(config.guild_id);
-  const {data:connections,error:verificationError}=await verifiedDiscordConnections([run.user_id]);
-  if(verificationError)throw verificationError;
-  const authorId=connections?.[0]?.external_user_id;
+  const {discord}=await verifiedPlatformConnections([run.user_id]);
+  const authorId=discord.get(run.user_id);
   const author=guild&&authorId===interaction.user.id?await guild.members.fetch({user:authorId,force:true}).catch(()=>null):null;
   if(!author?.permissions.has(PermissionFlagsBits.ManageGuild))throw new Error('The connected account must manage the selected Discord server.');
   const channel=await guild.channels.fetch(config.channel_id).catch(()=>null);
@@ -179,9 +178,8 @@ async function handleReaction(reaction,user,adding){
   const {data:item,error}=await supabase.from('discord_reaction_role_items').select('role_id,role_name,discord_reaction_menus!inner(user_id,message_id,remove_on_unreact,active)').eq('emoji',reactionKey(reaction)).eq('discord_reaction_menus.message_id',message.id).eq('discord_reaction_menus.guild_id',guild.id).eq('discord_reaction_menus.channel_id',message.channelId).eq('discord_reaction_menus.active',true).maybeSingle();
   if(error){console.error('[reaction-role]',error.message);return}if(!item)return;
   const menu=Array.isArray(item.discord_reaction_menus)?item.discord_reaction_menus[0]:item.discord_reaction_menus;if(!adding&&!menu?.remove_on_unreact)return;
-  const {data:connections,error:verificationError}=await verifiedDiscordConnections([menu.user_id]);
-  if(verificationError)throw verificationError;
-  const authorId=connections?.[0]?.external_user_id;
+  const {discord}=await verifiedPlatformConnections([menu.user_id]);
+  const authorId=discord.get(menu.user_id);
   const author=authorId?await guild.members.fetch({user:authorId,force:true}).catch(()=>null):null;
   const role=guild.roles.cache.get(item.role_id);
   if(!role?.editable){await logActivity(guild.id,'reaction_role_error','warning','Reaction role could not be managed',`B.E.I.P.I. cannot manage ${item.role_name||'the selected role'}.`,{roleId:item.role_id,messageId:reaction.message.id});return}
@@ -249,16 +247,16 @@ async function requestTwitchData(payload){
  return data;
 }
 
-async function verifiedDiscordConnections(userIds){
+async function verifiedPlatformConnections(userIds){
  const ids=[...new Set(userIds)];
- const connections=[];
- try{
-  for(let offset=0;offset<ids.length;offset+=100){
-   const rows=await requestTwitchData({connectionUserIds:ids.slice(offset,offset+100)});
-   connections.push(...rows.filter(row=>row.platform==='discord'));
+ const connections={discord:new Map(),twitch:new Map()};
+ for(let offset=0;offset<ids.length;offset+=100){
+  const rows=await requestTwitchData({connectionUserIds:ids.slice(offset,offset+100)});
+  for(const {platform,user_id,external_user_id} of rows){
+   if(platform==='discord'||platform==='twitch')connections[platform].set(user_id,external_user_id);
   }
-  return {data:connections,error:null};
- }catch(error){return {data:null,error}}
+ }
+ return connections;
 }
 function renderTemplate(template,member,activity){const item=pick(randomItems),animal=pick(randomAnimals),dinosaur=pick(randomDinosaurs),values={streamer:member.displayName,title:activity?.details||activity?.state||'A new adventure',game:activity?.state||activity?.details||'something exciting',platform:activity?.name||'their stream',url:activity?.url||'',server:member.guild.name,random_item:item,random_animal:animal,random_dinosaur:dinosaur,random_companion:pick([item,animal,dinosaur])};return (template||creatorDefault).replace(/\{([a-z_]+)\}/g,(match,key)=>values[key]??match).replace(/\n{3,}/g,'\n\n').trim().slice(0,1950)}
 
@@ -285,7 +283,6 @@ async function loadSettings(){
     throw error;
    }),
   ]);
-  const discordByUser=new Map(),twitchByUser=new Map();
   const ruleUsers=new Set([...ownerRows,...communityRows].map(row=>row.user_id));
   const communityTwitchEnabled=communityRows.some(rule=>rule.platform_confirmation_enabled);
   if(communityTwitchEnabled){
@@ -298,14 +295,7 @@ async function loadSettings(){
     if(data.length<pageSize)break;
    }
   }
-  const userIds=[...ruleUsers];
-  for(let offset=0;offset<userIds.length;offset+=100){
-   const data=await requestTwitchData({connectionUserIds:userIds.slice(offset,offset+100)});
-   for(const connection of data){
-    const connections=connection.platform==='twitch'?twitchByUser:discordByUser;
-    connections.set(connection.user_id,connection.external_user_id);
-   }
-  }
+  const {discord:discordByUser,twitch:twitchByUser}=await verifiedPlatformConnections(ruleUsers);
 
   const verifiedAuthors=new Map();
   async function ruleManager(row){

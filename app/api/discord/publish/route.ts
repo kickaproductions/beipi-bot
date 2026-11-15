@@ -1,11 +1,9 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {draftSchema} from '@/app/discord-schema';
-import {decryptDiscordSession} from '@/app/api/auth/discord/session';
-import {getPlatformConnection} from '@/lib/platform-connections';
+import {fetchDiscordGuilds,hasDiscordGuildPermissions,ManageChannels,ManageRoles,ManageServer,selectDiscordSession,type DiscordGuild} from '@/lib/discord-guilds';
 import {createClient} from '@/lib/supabase/server';
 
 export const runtime='nodejs';
-type Guild={id:string;owner:boolean;permissions:string};
 type Channel={id:string;name:string;type:number};
 
 const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'no-store'}});
@@ -14,9 +12,7 @@ export async function POST(request:NextRequest){
   const supabase=await createClient();
   const {data:{user}}=await supabase.auth.getUser();
   if(!user)return json({error:'Sign in to publish to Discord.'},401);
-  let encrypted:string|undefined;
-  try{encrypted=(await getPlatformConnection('discord'))?.encrypted_session}catch{}
-  const session=encrypted?decryptDiscordSession(encrypted):null;
+  const session=(await selectDiscordSession())?.session;
   if(!session?.user?.username)return json({error:'Connect Discord before publishing.'},401);
   const parsed=draftSchema.safeParse(await request.json());
   if(!parsed.success)return json({error:parsed.error.issues[0]?.message||'Check the message details.'},400);
@@ -25,13 +21,13 @@ export async function POST(request:NextRequest){
   const botToken=process.env.DISCORD_BOT_TOKEN;
   if(!botToken)return json({error:'B.E.I.P.I.’s Discord bot token is not configured.'},503);
   try{
-    const guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'});
+    const guildResponse=await fetchDiscordGuilds(session);
     if(!guildResponse.ok)return json({error:'Reconnect Discord, then try publishing again.'},401);
-    const guilds=await guildResponse.json() as Guild[];
-    let required=BigInt(32);
-    if(draft.mode==='new')required|=BigInt(16);
-    if(draft.type==='reaction')required|=BigInt(268435456);
-    const allowed=guilds.some(g=>g.id===draft.serverId&&(g.owner||(BigInt(g.permissions)&BigInt(8))!==BigInt(0)||(BigInt(g.permissions)&required)===required));
+    const guilds=await guildResponse.json() as DiscordGuild[];
+    let required=ManageServer;
+    if(draft.mode==='new')required|=ManageChannels;
+    if(draft.type==='reaction')required|=ManageRoles;
+    const allowed=guilds.some(g=>g.id===draft.serverId&&hasDiscordGuildPermissions(g,required));
     if(!allowed)return json({error:'You need Manage Server, plus Manage Channels to create channels or Manage Roles to publish reaction roles.'},403);
 
     let channelId=draft.channelId;
