@@ -1,4 +1,0 @@
-import {NextRequest,NextResponse} from 'next/server';import {decryptGoogleSession,GOOGLE_SESSION_COOKIE} from '../session';
-import {getPlatformConnection} from '@/lib/platform-connections';
-export const runtime='nodejs';
-export async function GET(request:NextRequest){let value=request.cookies.get(GOOGLE_SESSION_COOKIE)?.value;if(!value){try{value=(await getPlatformConnection('google'))?.encrypted_session}catch{}}if(!value)return NextResponse.json({connected:false});const session=decryptGoogleSession(value);if(!session)return NextResponse.json({connected:false});const response=NextResponse.json({connected:true,user:session.user,channel:session.channel,reauthorizationRequired:session.expiresAt<=Date.now()},{headers:{'Cache-Control':'no-store'}});if(!request.cookies.get(GOOGLE_SESSION_COOKIE))response.cookies.set(GOOGLE_SESSION_COOKIE,value,{httpOnly:true,secure:true,sameSite:'lax',path:'/',maxAge:60*60*24*30});return response}
