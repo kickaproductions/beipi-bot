@@ -122,6 +122,11 @@ const appearanceAccents = [
 type AppearanceBase = typeof appearanceBases[number]['id'];
 type AppearanceAccent = typeof appearanceAccents[number]['id'];
 
+const appearanceOptions = [
+    ...appearanceBases,
+    ...appearanceAccents.filter(option => option.id !== 'default'),
+];
+
 function paletteBand(colours: readonly string[], direction = '90deg') {
     return `linear-gradient(${direction}, ${colours.join(', ')})`;
 }
@@ -189,7 +194,7 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
         '--palette-band': paletteBand(bannerColours),
         '--palette-sidebar': paletteBand(bannerColours, '180deg'),
         '--palette-wash': paletteBand(bannerColours.map(colour =>
-            `color-mix(in srgb, ${colour} var(--rainbow-fill), var(--bg))`), '110deg'),
+            `color-mix(in srgb, ${colour} var(--palette-fill), var(--bg))`), '110deg'),
         '--palette-middle': bannerColours[Math.floor(bannerColours.length / 2)],
         '--palette-last': bannerColours[bannerColours.length - 1],
     } as CSSProperties;
@@ -523,32 +528,25 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     <span className="stat-icon peach"><Palette size={20}/></span>
     <span><strong>Appearance</strong><small>Dashboard colours and themes.</small></span>
     <ChevronRight size={18}/>
- </button><button type="button" className={settingsTab === 'accessibility' ? 'active' : ''} aria-current={settingsTab === 'accessibility' ? 'page' : undefined} onClick={() => setSettingsTab('accessibility')}><span className="stat-icon mint"><Accessibility size={20}/></span><span><strong>Accessibility</strong><small>Text, contrast, motion and links.</small></span><ChevronRight size={18}/></button></nav>{settingsTab === 'appearance' && <section className="appearance-palettes" aria-label="Appearance">
-    <fieldset>
-        <legend>Base</legend>
-        <div className="appearance-palette-options">
-            {appearanceBases.map(option => (
-                <label key={option.id} style={{ '--preview-band': paletteBand(option.colours) } as CSSProperties}>
-                    <span className="appearance-swatch" aria-hidden="true"/>
-                    <input type="radio" name="dashboard-base" checked={base === option.id} onChange={() => setBase(option.id)}/>
-                    <span>{option.label}</span>
-                </label>
-            ))}
-        </div>
-    </fieldset>
-    <fieldset>
-        <legend>Accent</legend>
-        <div className="appearance-palette-options">
-            {appearanceAccents.map(option => (
-                <label key={option.id} style={{ '--preview-band': paletteBand(option.colours) } as CSSProperties}>
-                    <span className="appearance-swatch" aria-hidden="true"/>
-                    <input type="radio" name="dashboard-accent" checked={accent === option.id} onChange={() => setAccent(option.id)}/>
-                    <span>{option.label}</span>
-                </label>
-            ))}
-        </div>
-    </fieldset>
-</section>}{settingsTab === 'accessibility' && <section className="card full accessibility-page"><section className="accessibility-settings" aria-labelledby="accessibility-title"><header><span className="stat-icon lavender"><Accessibility size={21}/></span><div><h2 id="accessibility-title">Your accessibility choices</h2><p>Make B.E.I.P.I. feel clearer and more comfortable for you. These choices stay on this device.</p></div></header>
+ </button><button type="button" className={settingsTab === 'accessibility' ? 'active' : ''} aria-current={settingsTab === 'accessibility' ? 'page' : undefined} onClick={() => setSettingsTab('accessibility')}><span className="stat-icon mint"><Accessibility size={20}/></span><span><strong>Accessibility</strong><small>Text, contrast, motion and links.</small></span><ChevronRight size={18}/></button></nav>{settingsTab === 'appearance' && <fieldset className="appearance-palettes">
+    <legend>Accent</legend>
+    <div className="appearance-palette-options">
+        {appearanceOptions.map(option => (
+            <label key={option.id} style={{ '--preview-band': paletteBand(option.colours) } as CSSProperties}>
+                <span className="appearance-swatch" aria-hidden="true"/>
+                <input type="radio" name="dashboard-accent" checked={(accent === 'default' ? base : accent) === option.id} onChange={() => {
+                    if ('light' in option) {
+                        setAccent(option.id);
+                    } else {
+                        setBase(option.id);
+                        setAccent('default');
+                    }
+                }}/>
+                <span>{option.label}</span>
+            </label>
+        ))}
+    </div>
+</fieldset>}{settingsTab === 'accessibility' && <section className="card full accessibility-page"><section className="accessibility-settings" aria-labelledby="accessibility-title"><header><span className="stat-icon lavender"><Accessibility size={21}/></span><div><h2 id="accessibility-title">Your accessibility choices</h2><p>Make B.E.I.P.I. feel clearer and more comfortable for you. These choices stay on this device.</p></div></header>
     <div className="accessibility-text-size">
         <div className="accessibility-text-size-heading">
             <label htmlFor="dashboard-text-size"><Type size={20} aria-hidden="true"/> Font size</label>
