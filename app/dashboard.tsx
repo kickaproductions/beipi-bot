@@ -99,21 +99,17 @@ const futurePlatforms = [
     { name: 'Custom RTMP', className: 'rtmp', mark: <Radio size={23}/>, copy: 'Save another streaming destination or custom broadcast endpoint.', note: 'Manual setup planned' }
 ];
 const appearanceBases = [
-    { id: 'light', label: 'Light', colours: ['#ffffff', '#f0e9f8', '#8058b7'] },
-    { id: 'dark', label: 'Dark', colours: ['#17121f', '#332541', '#b99ae6'] },
-    { id: 'contrast', label: 'Contrast', colours: ['#000000', '#ffffff', '#ffff00'] },
+    { id: 'light', label: 'Light', colours: ['#f4f0f8', '#f4f0f8'] },
+    { id: 'dark', label: 'Dark', colours: ['#17121f', '#17121f'] },
+    { id: 'none', label: 'None', colours: ['#f8f7fa', '#f8f7fa'] },
 ] as const;
 
 const appearanceAccents = [
     { id: 'default', label: 'Default', light: '#7548a5', dark: '#c4a1f1', colours: ['#e9def2', '#a27acc'] },
-    { id: 'light-lavender', label: 'Light Lavender', light: '#69469a', dark: '#dac4ff', colours: ['#f2e9ff', '#bba4e7'] },
-    { id: 'dark-plum', label: 'Dark Plum', light: '#642c71', dark: '#e4a7eb', colours: ['#432046', '#8b4692'] },
+    { id: 'light-lavender', label: 'Lavender', light: '#69469a', dark: '#dac4ff', colours: ['#f2e9ff', '#bba4e7'] },
+    { id: 'dark-plum', label: 'Plum', light: '#642c71', dark: '#e4a7eb', colours: ['#432046', '#8b4692'] },
     { id: 'pastel', label: 'Pastel Rainbow', light: '#713a9b', dark: '#e5b8ff', colours: ['#ff9bbb', '#ffb287', '#ffe37a', '#9be7a7', '#8bd9ff', '#c4a6ff', '#f6a7e2'] },
     { id: 'rainbow', label: 'Dark Rainbow', light: '#6538a1', dark: '#d1b5ff', colours: ['#d63862', '#e66c32', '#dca21a', '#279c63', '#367bd0', '#874bc4', '#c23b9a'] },
-    { id: 'blue', label: 'High Contrast Blue', light: '#0048ac', dark: '#70c7ff', colours: ['#0048ac', '#70c7ff'] },
-    { id: 'green', label: 'High Contrast Green', light: '#176338', dark: '#7dff96', colours: ['#176338', '#7dff96'] },
-    { id: 'yellow', label: 'High Contrast Yellow', light: '#735000', dark: '#ffff00', colours: ['#b87f00', '#ffff00'] },
-    { id: 'white', label: 'High Contrast White', light: '#292929', dark: '#ffffff', colours: ['#c5c5c5', '#ffffff'] },
     { id: 'rose', label: 'Rose', light: '#8a2450', dark: '#ffa9ca', colours: ['#f5a9c5', '#d9618d', '#8a2450'] },
     { id: 'lilac', label: 'Lilac', light: '#70469d', dark: '#d2afff', colours: ['#e2cff9', '#af86dc'] },
     { id: 'teal', label: 'Teal', light: '#00675f', dark: '#6ce8d4', colours: ['#a4ecdc', '#268d80'] },
@@ -122,10 +118,14 @@ const appearanceAccents = [
 type AppearanceBase = typeof appearanceBases[number]['id'];
 type AppearanceAccent = typeof appearanceAccents[number]['id'];
 
-const appearanceOptions = [
-    ...appearanceBases,
-    ...appearanceAccents.filter(option => option.id !== 'default'),
-];
+const contrastColours = [
+    { id: 'white', label: 'White', colour: '#ffffff' },
+    { id: 'blue', label: 'Blue', colour: '#70c7ff' },
+    { id: 'green', label: 'Green', colour: '#7dff96' },
+    { id: 'yellow', label: 'Yellow', colour: '#ffff00' },
+] as const;
+
+type ContrastColour = typeof contrastColours[number]['id'];
 
 function paletteBand(colours: readonly string[], direction = '90deg') {
     return `linear-gradient(${direction}, ${colours.join(', ')})`;
@@ -181,16 +181,17 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     const [discordDirty, setDiscordDirty] = useState(false);
     const [textSize, setTextSize] = useState(DEFAULT_TEXT_SIZE);
     const [view, setView] = useState<View>('Home'), [settingsTab, setSettingsTab] = useState<SettingsTab>('account'), [initialCrewSpace, setInitialCrewSpace] = useState(''), [crewInviteOpen, setCrewInviteOpen] = useState(false), [streamTab, setStreamTab] = useState<StreamTab>('overview'), [items, setItems] = useState<Item[]>([]), [loading, setLoading] = useState(true), [error, setError] = useState(''), [toast, setToast] = useState(''), [busy, setBusy] = useState(false), [dialog, setDialog] = useState<string | null>(null), [filter, setFilter] = useState('open'), [menu, setMenu] = useState(false), [focus, setFocus] = useState(false), [base, setBase] = useState<AppearanceBase>('dark'), [accent, setAccent] = useState<AppearanceAccent>('default'), [highContrast, setHighContrast] = useState(false), [reducedMotion, setReducedMotion] = useState(false), [underlineLinks, setUnderlineLinks] = useState(false), [preferencesLoaded, setPreferencesLoaded] = useState(false), [username, setUsername] = useState(initialUsername), [usernameDraft, setUsernameDraft] = useState(initialUsername), [usernameBusy, setUsernameBusy] = useState(false), [usernameError, setUsernameError] = useState(''), [identityName, setIdentityName] = useState(initialUsername || userName);
-    const dark = base !== 'light';
+    const [contrastColour, setContrastColour] = useState<ContrastColour>('white');
+    const dark = highContrast || base === 'dark';
     const selectedAccent = appearanceAccents.find(option => option.id === accent) ?? appearanceAccents[0];
-    const effectiveContrast = highContrast || base === 'contrast';
-    const accentColour = base === 'contrast' && accent === 'default' ? '#ffff00' : dark ? selectedAccent.dark : selectedAccent.light;
+    const accentColour = dark ? selectedAccent.dark : selectedAccent.light;
     const bannerColours = accent === 'default'
         ? (appearanceBases.find(option => option.id === base) ?? appearanceBases[1]).colours
         : selectedAccent.colours;
     const paletteStyle = {
         '--dashboard-text-scale': textSize / DEFAULT_TEXT_SIZE,
         '--dashboard-accent': accentColour,
+        '--dashboard-contrast-accent': contrastColours.find(option => option.id === contrastColour)?.colour ?? contrastColours[0].colour,
         '--palette-band': paletteBand(bannerColours),
         '--palette-sidebar': paletteBand(bannerColours, '180deg'),
         '--palette-wash': paletteBand(bannerColours.map(colour =>
@@ -228,13 +229,20 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     useEffect(() => {
         const storage = window.localStorage;
         const legacy = storage.getItem('beipi-palette');
-        const savedBase = appearanceBases.find(option => option.id === storage.getItem('beipi-appearance-base'));
-        const savedAccent = appearanceAccents.find(option => option.id === storage.getItem('beipi-appearance-accent'));
-        const legacyBase = legacy === 'contrast' ? 'contrast'
-            : legacy === 'light' || legacy === 'pastel' || legacy === 'rose' || (!legacy && storage.getItem('beipi-theme') === 'light') ? 'light' : 'dark';
-        setBase(savedBase?.id ?? legacyBase);
+        const savedBaseId = storage.getItem('beipi-appearance-base');
+        const savedAccentId = storage.getItem('beipi-appearance-accent');
+        const savedBase = appearanceBases.find(option => option.id === savedBaseId);
+        const savedAccent = appearanceAccents.find(option => option.id === savedAccentId);
+        const savedContrastColour = contrastColours.find(option => option.id === storage.getItem('beipi-a11y-contrast-colour'));
+        const legacyContrastColour = contrastColours.find(option => option.id === savedAccentId);
+        const legacyContrast = savedBaseId === 'contrast' || (!savedBaseId && legacy === 'contrast');
+        const legacyBase = legacy === 'light' || legacy === 'pastel' || legacy === 'rose'
+            || (!legacy && storage.getItem('beipi-theme') === 'light') ? 'light' : 'dark';
+        setBase(savedBase?.id ?? (legacyContrast ? 'dark' : legacyBase));
         setAccent(savedAccent?.id ?? (legacy === 'pastel' || legacy === 'rainbow' || legacy === 'rose' ? legacy : 'default'));
-        setTextSize(getSavedTextSize(window.localStorage)); setHighContrast(window.localStorage.getItem('beipi-a11y-high-contrast') === 'true'); setUnderlineLinks(window.localStorage.getItem('beipi-a11y-underline-links') === 'true'); const savedMotion = window.localStorage.getItem('beipi-a11y-reduced-motion'); setReducedMotion(savedMotion === null ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : savedMotion === 'true'); const reminderLayout = window.localStorage.getItem('beipi-reminder-layout'), ideaLayout = window.localStorage.getItem('beipi-idea-layout'), savedChecklistLayout = window.localStorage.getItem('beipi-checklist-layout'); setListLayout({ Reminders: reminderLayout === 'grid' ? 'grid' : 'list', 'Idea Pocket': ideaLayout === 'list' ? 'list' : 'grid' }); setChecklistLayout(savedChecklistLayout === 'grid' ? 'grid' : 'list'); setPreferencesLoaded(true); }, []);
+        setHighContrast(legacyContrast || Boolean(legacyContrastColour) || storage.getItem('beipi-a11y-high-contrast') === 'true');
+        setContrastColour(savedContrastColour?.id ?? legacyContrastColour?.id ?? (legacyContrast ? 'yellow' : 'white'));
+        setTextSize(getSavedTextSize(window.localStorage)); setUnderlineLinks(window.localStorage.getItem('beipi-a11y-underline-links') === 'true'); const savedMotion = window.localStorage.getItem('beipi-a11y-reduced-motion'); setReducedMotion(savedMotion === null ? window.matchMedia('(prefers-reduced-motion: reduce)').matches : savedMotion === 'true'); const reminderLayout = window.localStorage.getItem('beipi-reminder-layout'), ideaLayout = window.localStorage.getItem('beipi-idea-layout'), savedChecklistLayout = window.localStorage.getItem('beipi-checklist-layout'); setListLayout({ Reminders: reminderLayout === 'grid' ? 'grid' : 'list', 'Idea Pocket': ideaLayout === 'list' ? 'list' : 'grid' }); setChecklistLayout(savedChecklistLayout === 'grid' ? 'grid' : 'list'); setPreferencesLoaded(true); }, []);
     useEffect(() => {
         function restoreDashboardLocation() {
             const params = new URLSearchParams(window.location.search);
@@ -259,7 +267,7 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
         return () => window.removeEventListener('popstate', restoreDashboardLocation);
     }, [isTester]);
     useEffect(() => { if (!preferencesLoaded)
-        return; window.localStorage.setItem('beipi-appearance-base', base); window.localStorage.setItem('beipi-appearance-accent', accent); window.localStorage.setItem('beipi-a11y-high-contrast', String(highContrast)); window.localStorage.setItem('beipi-a11y-reduced-motion', String(reducedMotion)); window.localStorage.setItem('beipi-a11y-underline-links', String(underlineLinks)); }, [preferencesLoaded, base, accent, highContrast, reducedMotion, underlineLinks]);
+        return; window.localStorage.setItem('beipi-appearance-base', base); window.localStorage.setItem('beipi-appearance-accent', accent); window.localStorage.setItem('beipi-a11y-high-contrast', String(highContrast)); window.localStorage.setItem('beipi-a11y-contrast-colour', contrastColour); window.localStorage.setItem('beipi-a11y-reduced-motion', String(reducedMotion)); window.localStorage.setItem('beipi-a11y-underline-links', String(underlineLinks)); }, [preferencesLoaded, base, accent, highContrast, contrastColour, reducedMotion, underlineLinks]);
     useEffect(() => {
         if (preferencesLoaded) window.localStorage.setItem(TEXT_SIZE_KEY, String(textSize));
     }, [preferencesLoaded, textSize]);
@@ -478,9 +486,9 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
         </div>;
     }
     function empty(kind: string) { return <div className="empty"><div className="empty-icon">{kind === 'checklist' ? <ClipboardCheck /> : kind === 'idea' ? <Lightbulb /> : <Leaf />}</div><h3>{kind === 'checklist' ? 'Your routine, your way.' : kind === 'idea' ? 'A home for your next good idea.' : 'A little space to breathe.'}</h3><p>{kind === 'checklist' ? 'Save the things you like to check before going live.' : kind === 'idea' ? 'Stream ideas, games to try, little thoughts worth keeping.' : 'Nothing waiting here. Add a note whenever you need one.'}</p>{kind === 'checklist' ? <button className="primary" disabled={busy} onClick={() => void template()}>Use a starter checklist <Plus size={16}/></button> : <button className="outline" onClick={() => openNewItem(kind)}>Add your first {kind === 'idea' ? 'idea' : 'reminder'} <Plus size={16}/></button>}</div>; }
-    return <div className={'shell ' + (popout ? 'dashboard-popout ' : '') + (focus ? 'focus-mode ' : '') + (dark ? 'dark-theme ' : 'light-theme ') + (textSize > DEFAULT_TEXT_SIZE ? 'text-large ' : '') + (effectiveContrast ? 'high-contrast ' : '') + (reducedMotion ? 'reduce-motion ' : '') + (underlineLinks ? 'underline-links' : '')} data-palette={base} data-accent={accent} style={paletteStyle}>
+    return <div className={'shell ' + (popout ? 'dashboard-popout ' : '') + (focus ? 'focus-mode ' : '') + (dark ? 'dark-theme ' : 'light-theme ') + (textSize > DEFAULT_TEXT_SIZE ? 'text-large ' : '') + (highContrast ? 'high-contrast ' : '') + (reducedMotion ? 'reduce-motion ' : '') + (underlineLinks ? 'underline-links' : '')} data-palette={base} data-accent={accent} style={paletteStyle}>
  <aside id="dashboard-navigation" className={menu ? 'sidebar visible' : 'sidebar'}><a href="/" className="brand" aria-label="B.E.I.P.I. home"><img className="brand-mark" src="/beipi-bot-badge.png" width={44} height={44} alt=""/><div>B.E.I.P.I<small>Your streaming companion</small></div></a><div className="workspace"><div className="workspace-icon">{identityName.slice(0, 1).toUpperCase()}</div><div><strong>{identityName}</strong><small>{isTester ? 'Your private dashboard' : 'Dashboard preview'}</small></div><ShieldCheck size={16}/></div><div className="sidebar-links"><div className="nav-label">YOUR SPACE</div><nav aria-label="Dashboard sections">{navigation.map(({ name, icon: Icon }) => { const locked = !isTester && name !== 'Home', count = name === 'Reminders' ? reminders.length : name === 'Idea Pocket' ? open.filter(item => item.kind === 'idea').length : 0; return <a key={name} href={locked ? "/tester" : dashboardUrl(name, streamTab, popout)} className={'dashboard-nav-link ' + (view === name ? 'active ' : '') + (locked ? 'nav-locked' : '')} onClick={event => followDashboardLink(event, name)} aria-current={view === name ? 'page' : undefined} aria-label={locked ? `${name} — beta access required` : name} title={popout ? name : undefined}><Icon size={19}/><span className="dashboard-nav-text">{name}</span>{locked ? <LockKeyhole className="nav-lock" size={14}/> : count > 0 && <span className="count">{count}</span>}</a>; })}</nav></div><div className="sidebar-note"><Heart size={17}/><p>Less to remember.<br /><strong>More room to be you.</strong></p></div><a href={dashboardUrl("Account settings", streamTab, popout)} className={'profile ' + (view === 'Account settings' ? 'active' : '')} aria-label={popout ? 'Account settings' : undefined} title={popout ? 'Account settings' : undefined} onClick={event => followDashboardLink(event, 'Account settings')} aria-current={view === 'Account settings' ? 'page' : undefined}><div className="avatar">{identityName.slice(0, 1).toUpperCase()}</div><div><strong>{identityName}</strong><small>Account settings</small></div><Settings size={15}/></a></aside>
- <div className="body"><header className="topbar"><div className="crumb"><button className="mobile-menu" aria-label={menu ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menu} aria-controls="dashboard-navigation" onClick={() => setMenu(!menu)}><Menu size={22}/></button><span>Your companion</span><ChevronRight size={14}/><strong>{view}</strong></div><div className="topbar-actions">{!popout && <a className="quiet dashboard-popout-link" href={popoutUrl} target="_blank" rel="noopener" aria-label="Open dashboard in a new window" title="Open dashboard in a new window" onClick={openDashboardWindow}><ExternalLink size={15}/><span>Pop out</span></a>}<button className="quiet theme-toggle" onClick={() => setBase(dark ? 'light' : 'dark')} aria-pressed={!dark} aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'} title={dark ? 'Switch to light mode' : 'Switch to dark mode'}>{dark ? <Sun size={15}/> : <Moon size={15}/>}<span>{dark ? 'Light mode' : 'Dark mode'}</span></button><button className={'quiet ' + (focus ? 'selected' : '')} onClick={() => setFocus(!focus)} aria-pressed={focus}><Leaf size={15}/>{focus ? 'Show everything' : 'Focus view'}</button></div></header>
+ <div className="body"><header className="topbar"><div className="crumb"><button className="mobile-menu" aria-label={menu ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={menu} aria-controls="dashboard-navigation" onClick={() => setMenu(!menu)}><Menu size={22}/></button><span>Your companion</span><ChevronRight size={14}/><strong>{view}</strong></div><div className="topbar-actions">{!popout && <a className="quiet dashboard-popout-link" href={popoutUrl} target="_blank" rel="noopener" aria-label="Open dashboard in a new window" title="Open dashboard in a new window" onClick={openDashboardWindow}><ExternalLink size={15}/><span>Pop out</span></a>}<button className="quiet theme-toggle" onClick={() => setBase(base === 'dark' ? 'light' : 'dark')} aria-pressed={base !== 'dark'} aria-label={base === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={base === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>{base === 'dark' ? <Sun size={15}/> : <Moon size={15}/>}<span>{base === 'dark' ? 'Light mode' : 'Dark mode'}</span></button><button className={'quiet ' + (focus ? 'selected' : '')} onClick={() => setFocus(!focus)} aria-pressed={focus}><Leaf size={15}/>{focus ? 'Show everything' : 'Focus view'}</button></div></header>
 <main><div className="page-heading"><div>{view === 'Reminders' && <div className="eyebrow">A LITTLE LESS TO HOLD IN YOUR HEAD</div>}<h1>{view === 'Home' ? `Welcome, ${identityName}.` : view}</h1><p>{view === 'Home' ? (isTester ? 'Pick up where you left off. One little thing at a time.' : 'Take a look around while your beta access is locked.') : view === 'Reminders' ? 'A gentle place for the things you want to remember.' : view === 'My Stream' ? 'Plan, prepare and understand your streams in one place.' : view === 'Idea Pocket' ? 'Put it here before it disappears.' : view === 'Discord Setup' ? 'Your banners, messages and reaction roles. One step at a time.' : view === 'Connections' ? 'Your streaming platforms, together in one place.' : view === 'Account settings' ? 'Your profile, security and accessibility preferences in one place.' : 'A little support from the people you trust.'}</p></div>{isTester && view === 'My Crew' && <button className="primary" onClick={() => setCrewInviteOpen(true)}><UserPlus size={17}/> Give / Revoke access to My Crew</button>}{isTester && (['Reminders', 'Idea Pocket', 'Connections'].includes(view) || (view === 'My Stream' && streamTab === 'checklist')) && <button className="primary" onClick={() => openNewItem(kinds[view] ?? 'reminder')}><Plus size={17}/>{view === 'Idea Pocket' ? 'Save an idea' : view === 'My Stream' ? 'Add a step' : view === 'Connections' ? 'Save a channel' : 'Add a reminder'}</button>}</div>
  {error && <div className="error" role="alert">{error}<button onClick={() => setError('')} aria-label="Dismiss error"><X size={16}/></button></div>}
  {loading ? <div className="loading">B.E.I.P.I is finding your place…</div> : <>
@@ -528,25 +536,32 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     <span className="stat-icon peach"><Palette size={20}/></span>
     <span><strong>Appearance</strong><small>Dashboard colours and themes.</small></span>
     <ChevronRight size={18}/>
- </button><button type="button" className={settingsTab === 'accessibility' ? 'active' : ''} aria-current={settingsTab === 'accessibility' ? 'page' : undefined} onClick={() => setSettingsTab('accessibility')}><span className="stat-icon mint"><Accessibility size={20}/></span><span><strong>Accessibility</strong><small>Text, contrast, motion and links.</small></span><ChevronRight size={18}/></button></nav>{settingsTab === 'appearance' && <fieldset className="appearance-palettes">
-    <legend>Accent</legend>
-    <div className="appearance-palette-options">
-        {appearanceOptions.map(option => (
-            <label key={option.id} style={{ '--preview-band': paletteBand(option.colours) } as CSSProperties}>
-                <span className="appearance-swatch" aria-hidden="true"/>
-                <input type="radio" name="dashboard-accent" checked={(accent === 'default' ? base : accent) === option.id} onChange={() => {
-                    if ('light' in option) {
-                        setAccent(option.id);
-                    } else {
-                        setBase(option.id);
-                        setAccent('default');
-                    }
-                }}/>
-                <span>{option.label}</span>
-            </label>
-        ))}
-    </div>
-</fieldset>}{settingsTab === 'accessibility' && <section className="card full accessibility-page"><section className="accessibility-settings" aria-labelledby="accessibility-title"><header><span className="stat-icon lavender"><Accessibility size={21}/></span><div><h2 id="accessibility-title">Your accessibility choices</h2><p>Make B.E.I.P.I. feel clearer and more comfortable for you. These choices stay on this device.</p></div></header>
+ </button><button type="button" className={settingsTab === 'accessibility' ? 'active' : ''} aria-current={settingsTab === 'accessibility' ? 'page' : undefined} onClick={() => setSettingsTab('accessibility')}><span className="stat-icon mint"><Accessibility size={20}/></span><span><strong>Accessibility</strong><small>Text, contrast, motion and links.</small></span><ChevronRight size={18}/></button></nav>{settingsTab === 'appearance' && <section className="appearance-palettes" aria-label="Appearance">
+    <fieldset>
+        <legend>Background</legend>
+        <div className="appearance-palette-options">
+            {appearanceBases.map(option => (
+                <label key={option.id} style={{ '--preview-band': paletteBand(option.colours) } as CSSProperties}>
+                    <span className={option.id === 'none' ? 'appearance-swatch no-background' : 'appearance-swatch'} aria-hidden="true"/>
+                    <input type="radio" name="dashboard-background" checked={base === option.id} onChange={() => setBase(option.id)}/>
+                    <span>{option.label}</span>
+                </label>
+            ))}
+        </div>
+    </fieldset>
+    <fieldset>
+        <legend>Colour palette</legend>
+        <div className="appearance-palette-options">
+            {appearanceAccents.map(option => (
+                <label key={option.id} style={{ '--preview-band': paletteBand(option.colours) } as CSSProperties}>
+                    <span className="appearance-swatch" aria-hidden="true"/>
+                    <input type="radio" name="dashboard-palette" checked={accent === option.id} onChange={() => setAccent(option.id)}/>
+                    <span>{option.label}</span>
+                </label>
+            ))}
+        </div>
+    </fieldset>
+</section>}{settingsTab === 'accessibility' && <section className="card full accessibility-page"><section className="accessibility-settings" aria-labelledby="accessibility-title"><header><span className="stat-icon lavender"><Accessibility size={21}/></span><div><h2 id="accessibility-title">Your accessibility choices</h2><p>Make B.E.I.P.I. feel clearer and more comfortable for you. These choices stay on this device.</p></div></header>
     <div className="accessibility-text-size">
         <div className="accessibility-text-size-heading">
             <label htmlFor="dashboard-text-size"><Type size={20} aria-hidden="true"/> Font size</label>
@@ -568,7 +583,18 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
         </div>
         <p className="accessibility-text-preview">Pick up where you left off. One little thing at a time.</p>
     </div>
-    <div className="accessibility-grid"><button type="button" className={highContrast ? 'active' : ''} aria-pressed={highContrast} onClick={() => setHighContrast(!highContrast)}><Contrast size={20}/><span><strong>Higher contrast</strong><small>Strengthen text, borders and focus indicators.</small></span><Check size={17}/></button><button type="button" className={reducedMotion ? 'active' : ''} aria-pressed={reducedMotion} onClick={() => setReducedMotion(!reducedMotion)}><Leaf size={20}/><span><strong>Reduce motion</strong><small>Remove decorative movement and transitions.</small></span><Check size={17}/></button><button type="button" className={underlineLinks ? 'active' : ''} aria-pressed={underlineLinks} onClick={() => setUnderlineLinks(!underlineLinks)}><Link2 size={20}/><span><strong>Underline links</strong><small>Make links easier to distinguish from text.</small></span><Check size={17}/></button></div><button type="button" className="accessibility-reset" onClick={() => { setTextSize(DEFAULT_TEXT_SIZE); setHighContrast(false); setReducedMotion(window.matchMedia('(prefers-reduced-motion: reduce)').matches); setUnderlineLinks(false); }}><RotateCcw size={15}/> Reset accessibility choices</button></section></section>}{settingsTab === 'account' && <section className="card full account-settings"><div className="account-intro"><div className="avatar account-avatar">{identityName.slice(0, 1).toUpperCase()}</div><div><h2>{identityName}</h2><p>{username ? 'Your B.E.I.P.I. username' : isTester ? 'Private beta dashboard' : 'B.E.I.P.I. account'}</p></div></div><form className="setting-row username-setting" onSubmit={saveUsername}><div><strong>Username</strong><p>Choose the unique name people will recognise across B.E.I.P.I.</p></div><div className="username-editor"><label><span>@</span><input aria-label="B.E.I.P.I. username" value={usernameDraft} onChange={event => setUsernameDraft(event.target.value.replace(/[^A-Za-z0-9_]/g, ''))} minLength={3} maxLength={24} pattern="[A-Za-z0-9_]{3,24}" required placeholder="Your_Username"/></label><button className="outline" disabled={usernameBusy || usernameDraft === username}>{usernameBusy ? 'Saving…' : username ? 'Update' : 'Save username'}</button>{usernameError && <small role="alert">{usernameError}</small>}</div></form><div className="setting-row"><div><strong>Account access</strong><p>Your permanent B.E.I.P.I. account is connected and protecting this dashboard.</p></div><span className="status-inline connected">Connected</span></div><div className="setting-row"><div><strong>Security &amp; 2FA</strong><p>Add an authenticator app as an extra layer of account protection.</p></div><a className="outline developer-link" href="/account/security"><ShieldCheck size={15}/> Manage security</a></div>{isTester ? <div className="setting-row"><div><strong>Tester Portal</strong><p>Share feedback, report bugs and follow B.E.I.P.I.’s progress.</p></div><a className="outline developer-link" href="/tester"><MessageSquareText size={15}/> Open Tester Portal</a></div> : <div className="setting-row"><div><strong>Beta access</strong><p>Request access to unlock B.E.I.P.I.’s private testing features.</p></div><a className="outline developer-link" href="/tester"><LockKeyhole size={15}/> Request access</a></div>}{isDeveloper && <div className="setting-row"><div><strong>Developer access</strong><p>Manage accounts, tester access, connections, analytics and system health.</p></div><a className="outline developer-link" href="/developer"><ShieldCheck size={15}/> Open developer portal</a></div>}<div className="setting-row logout-row"><div><strong>Log out</strong><p>End your B.E.I.P.I. session on this device.</p></div><button className="outline logout-button" disabled={busy} onClick={() => void logOut()}><LogOut size={15}/>{busy ? 'Logging out…' : 'Log out'}</button></div></section>}</>}
+    <div className="accessibility-grid"><button type="button" className={highContrast ? 'active' : ''} aria-pressed={highContrast} onClick={() => setHighContrast(!highContrast)}><Contrast size={20}/><span><strong>High contrast</strong><small>Strengthen text, borders and focus indicators.</small></span><Check size={17}/></button><button type="button" className={reducedMotion ? 'active' : ''} aria-pressed={reducedMotion} onClick={() => setReducedMotion(!reducedMotion)}><Leaf size={20}/><span><strong>Reduce motion</strong><small>Remove decorative movement and transitions.</small></span><Check size={17}/></button><button type="button" className={underlineLinks ? 'active' : ''} aria-pressed={underlineLinks} onClick={() => setUnderlineLinks(!underlineLinks)}><Link2 size={20}/><span><strong>Underline links</strong><small>Make links easier to distinguish from text.</small></span><Check size={17}/></button></div>{highContrast && <fieldset className="contrast-colour-picker">
+        <legend>High contrast colour</legend>
+        <div className="appearance-palette-options">
+            {contrastColours.map(option => (
+                <label key={option.id} style={{ '--preview-band': option.colour } as CSSProperties}>
+                    <span className="appearance-swatch" aria-hidden="true"/>
+                    <input type="radio" name="dashboard-contrast-colour" checked={contrastColour === option.id} onChange={() => setContrastColour(option.id)}/>
+                    <span>{option.label}</span>
+                </label>
+            ))}
+        </div>
+    </fieldset>}<button type="button" className="accessibility-reset" onClick={() => { setTextSize(DEFAULT_TEXT_SIZE); setHighContrast(false); setContrastColour('white'); setReducedMotion(window.matchMedia('(prefers-reduced-motion: reduce)').matches); setUnderlineLinks(false); }}><RotateCcw size={15}/> Reset accessibility choices</button></section></section>}{settingsTab === 'account' && <section className="card full account-settings"><div className="account-intro"><div className="avatar account-avatar">{identityName.slice(0, 1).toUpperCase()}</div><div><h2>{identityName}</h2><p>{username ? 'Your B.E.I.P.I. username' : isTester ? 'Private beta dashboard' : 'B.E.I.P.I. account'}</p></div></div><form className="setting-row username-setting" onSubmit={saveUsername}><div><strong>Username</strong><p>Choose the unique name people will recognise across B.E.I.P.I.</p></div><div className="username-editor"><label><span>@</span><input aria-label="B.E.I.P.I. username" value={usernameDraft} onChange={event => setUsernameDraft(event.target.value.replace(/[^A-Za-z0-9_]/g, ''))} minLength={3} maxLength={24} pattern="[A-Za-z0-9_]{3,24}" required placeholder="Your_Username"/></label><button className="outline" disabled={usernameBusy || usernameDraft === username}>{usernameBusy ? 'Saving…' : username ? 'Update' : 'Save username'}</button>{usernameError && <small role="alert">{usernameError}</small>}</div></form><div className="setting-row"><div><strong>Account access</strong><p>Your permanent B.E.I.P.I. account is connected and protecting this dashboard.</p></div><span className="status-inline connected">Connected</span></div><div className="setting-row"><div><strong>Security &amp; 2FA</strong><p>Add an authenticator app as an extra layer of account protection.</p></div><a className="outline developer-link" href="/account/security"><ShieldCheck size={15}/> Manage security</a></div>{isTester ? <div className="setting-row"><div><strong>Tester Portal</strong><p>Share feedback, report bugs and follow B.E.I.P.I.’s progress.</p></div><a className="outline developer-link" href="/tester"><MessageSquareText size={15}/> Open Tester Portal</a></div> : <div className="setting-row"><div><strong>Beta access</strong><p>Request access to unlock B.E.I.P.I.’s private testing features.</p></div><a className="outline developer-link" href="/tester"><LockKeyhole size={15}/> Request access</a></div>}{isDeveloper && <div className="setting-row"><div><strong>Developer access</strong><p>Manage accounts, tester access, connections, analytics and system health.</p></div><a className="outline developer-link" href="/developer"><ShieldCheck size={15}/> Open developer portal</a></div>}<div className="setting-row logout-row"><div><strong>Log out</strong><p>End your B.E.I.P.I. session on this device.</p></div><button className="outline logout-button" disabled={busy} onClick={() => void logOut()}><LogOut size={15}/>{busy ? 'Logging out…' : 'Log out'}</button></div></section>}</>}
  {view === 'Account settings' && settingsTab === 'accessibility' && <aside className="accessibility-contact card"><MessageSquareText size={20}/><div><strong>Is there something we could add?</strong><p>Accessibility needs are personal, and we want to keep learning. Tell us what would make B.E.I.P.I. easier for you at <a href="mailto:kickaa@beipi.app">kickaa@beipi.app</a>.</p></div></aside>}
  </>}
  <footer><span><Heart size={13}/> Made for brains with a few extra tabs open.</span><span>B.E.I.P.I · The streamer’s companion</span></footer>
