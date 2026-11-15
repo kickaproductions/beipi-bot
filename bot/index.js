@@ -220,20 +220,21 @@ function serial(key,task){const previous=memberQueues.get(key)||Promise.resolve(
 
 const matchingCommunityRules=(member,rules=[])=>rules.filter(rule=>rule.discord_presence_enabled&&(!rule.creator_role_id||member.roles.cache.has(rule.creator_role_id)));
 
+async function assignLiveRole(member,rule){
+ if(!rule.live_role_id||member.roles.cache.has(rule.live_role_id))return;
+ try{
+  const role=member.guild.roles.cache.get(rule.live_role_id);
+  if(!role?.editable)throw new Error('Check B.E.I.P.I.’s Manage Roles permission and role position.');
+  await member.roles.add(role,'B.E.I.P.I. detected Discord Streaming activity');
+ }catch(error){
+  console.warn('[roles]',error);
+  await logActivity(member.guild.id,'role_error','warning','Could not add the live role',
+   `B.E.I.P.I. could not assign ${rule.live_role_name||'the configured live role'}.`,{roleId:rule.live_role_id}).catch(console.error);
+ }
+}
+
 async function postLiveTarget(member,activity,target,existingKeys){
  if(existingKeys.has(target.sourceKey))return false;
-
- if(target.liveRoleId){
-  try{
-   const role=member.guild.roles.cache.get(target.liveRoleId);
-   if(!role?.editable)throw new Error('Check B.E.I.P.I.’s Manage Roles permission and role position.');
-   if(!member.roles.cache.has(role.id))await member.roles.add(role,'B.E.I.P.I. detected Discord Streaming activity');
-  }catch(error){
-   console.warn('[roles]',error);
-   await logActivity(member.guild.id,'role_error','warning','Could not add the live role',
-    `B.E.I.P.I. could not assign ${target.liveRoleName||'the configured live role'}.`,{roleId:target.liveRoleId}).catch(console.error);
-  }
- }
 
  const channel=member.guild.channels.cache.get(target.channelId)||
   await member.guild.channels.fetch(target.channelId).catch(()=>null);
@@ -265,9 +266,20 @@ async function goLive(member,presence,rules=[],personal=[]){
  const community=matchingCommunityRules(member,rules),personalRules=personal.filter(rule=>rule.alert_channel_id);if(!community.length&&!personalRules.length)return;
  try{
   const {data:existing,error:existingError}=await supabase.from('discord_live_events').select('source_key').not('message_id','is',null).eq('guild_id',member.guild.id).eq('member_id',member.id);if(existingError)throw existingError;
-  const existingKeys=new Set((existing||[]).map(row=>row.source_key)),activity=streamActivity(presence),targets=[];
-  for(const rule of community)targets.push({sourceKey:`community:${rule.id}`,channelId:rule.alert_channel_id,template:rule.creator_message_template||creatorDefault,liveRoleId:rule.live_role_id,liveRoleName:rule.live_role_name,roleIds:rule.mention_role_ids||[]});
-  for(const rule of personalRules)targets.push({sourceKey:`personal:${rule.id}`,channelId:rule.alert_channel_id,template:rule.message_template||ownerDefault,everyone:rule.everyone_enabled,roleIds:rule.mention_role_ids?.length?rule.mention_role_ids:(rule.role_id?[rule.role_id]:[])});
+  const existingKeys=new Set((existing||[]).map(row=>row.source_key));
+  const hasPersonalAlert=[...existingKeys].some(key=>key.startsWith('personal:'));
+  const hasCommunityAlert=[...existingKeys].some(key=>key.startsWith('community:'));
+  const usePersonal=hasPersonalAlert||personalRules.length>0;
+  const activity=streamActivity(presence),targets=[];
+  for(const rule of community){
+   const sourceKey=`community:${rule.id}`;
+   if(!hasPersonalAlert&&!existingKeys.has(sourceKey))await assignLiveRole(member,rule);
+   if(!usePersonal)targets.push({sourceKey,channelId:rule.alert_channel_id,template:rule.creator_message_template||creatorDefault,roleIds:rule.mention_role_ids||[]});
+  }
+  // Settings can change mid-stream. Keep the already-announced stream on its original route.
+  if(!hasCommunityAlert||hasPersonalAlert){
+   for(const rule of personalRules)targets.push({sourceKey:`personal:${rule.id}`,channelId:rule.alert_channel_id,template:rule.message_template||ownerDefault,everyone:rule.everyone_enabled,roleIds:rule.mention_role_ids?.length?rule.mention_role_ids:(rule.role_id?[rule.role_id]:[])});
+  }
   let sent=0;
   for(const target of targets){
    try{
