@@ -28,9 +28,11 @@ export async function POST(request:NextRequest){
     const guildResponse=await fetch('https://discord.com/api/users/@me/guilds',{headers:{Authorization:`Bearer ${session.accessToken}`},cache:'no-store'});
     if(!guildResponse.ok)return json({error:'Reconnect Discord, then try publishing again.'},401);
     const guilds=await guildResponse.json() as Guild[];
-    const required=BigInt(32)|(draft.type==='reaction'?BigInt(268435456):BigInt(0));
+    let required=BigInt(32);
+    if(draft.mode==='new')required|=BigInt(16);
+    if(draft.type==='reaction')required|=BigInt(268435456);
     const allowed=guilds.some(g=>g.id===draft.serverId&&(g.owner||(BigInt(g.permissions)&BigInt(8))!==BigInt(0)||(BigInt(g.permissions)&required)===required));
-    if(!allowed)return json({error:'You must manage this server to publish there.'},403);
+    if(!allowed)return json({error:'You need Manage Server, plus Manage Channels to create channels or Manage Roles to publish reaction roles.'},403);
 
     let channelId=draft.channelId;
     let channelName=draft.channel;

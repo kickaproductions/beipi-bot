@@ -160,18 +160,23 @@ async function syncGuild(guild,active=true){
 }
 
 const reactionKey=reaction=>reaction.emoji.id?`${reaction.emoji.name}:${reaction.emoji.id}`:reaction.emoji.name;
+const sensitiveRolePermissions=[
+ PermissionFlagsBits.Administrator,PermissionFlagsBits.KickMembers,PermissionFlagsBits.BanMembers,
+ PermissionFlagsBits.ManageGuild,PermissionFlagsBits.ManageRoles,PermissionFlagsBits.ModerateMembers,
+];
 function canManageDiscordRole(author,guild,role){
- return Boolean(role&&author?.permissions.has([PermissionFlagsBits.ManageGuild,PermissionFlagsBits.ManageRoles])&&
+ return Boolean(role?.editable&&!role.permissions.any(sensitiveRolePermissions)&&
+  author?.permissions.has([PermissionFlagsBits.ManageGuild,PermissionFlagsBits.ManageRoles])&&
   (author.id===guild.ownerId||author.roles.highest.comparePositionTo(role)>0));
 }
 
 async function handleReaction(reaction,user,adding){
  if(user.bot)return;
  try{
-  if(reaction.message.partial)await reaction.message.fetch();
+  const message=reaction.message.partial?await reaction.message.fetch():reaction.message;
   if(reaction.partial)await reaction.fetch();
-  const guild=reaction.message.guild;if(!guild||reaction.message.author?.id!==client.user?.id)return;
-  const {data:item,error}=await supabase.from('discord_reaction_role_items').select('role_id,role_name,discord_reaction_menus!inner(user_id,message_id,remove_on_unreact,active)').eq('emoji',reactionKey(reaction)).eq('discord_reaction_menus.message_id',reaction.message.id).eq('discord_reaction_menus.guild_id',guild.id).eq('discord_reaction_menus.channel_id',reaction.message.channelId).eq('discord_reaction_menus.active',true).maybeSingle();
+  const guild=message.guild;if(!guild||message.author?.id!==client.user?.id)return;
+  const {data:item,error}=await supabase.from('discord_reaction_role_items').select('role_id,role_name,discord_reaction_menus!inner(user_id,message_id,remove_on_unreact,active)').eq('emoji',reactionKey(reaction)).eq('discord_reaction_menus.message_id',message.id).eq('discord_reaction_menus.guild_id',guild.id).eq('discord_reaction_menus.channel_id',message.channelId).eq('discord_reaction_menus.active',true).maybeSingle();
   if(error){console.error('[reaction-role]',error.message);return}if(!item)return;
   const menu=Array.isArray(item.discord_reaction_menus)?item.discord_reaction_menus[0]:item.discord_reaction_menus;if(!adding&&!menu?.remove_on_unreact)return;
   const {data:connections,error:verificationError}=await verifiedDiscordConnections([menu.user_id]);

@@ -3,9 +3,8 @@ import {NextRequest,NextResponse} from 'next/server';
 export const runtime='nodejs';
 
 // Manage Channels, Add Reactions, View Channels, Send Messages, Embed Links,
-// Attach Files, Read History, Mention Everyone, External Emoji, Manage Roles,
-// and Manage Events. Deliberately does not request Administrator.
-const BEIPI_PERMISSIONS='8858881104';
+// Attach Files, Read History, Mention Everyone, External Emoji, and Manage Roles.
+const BEIPI_PERMISSIONS='268946512';
 
 export async function GET(request:NextRequest){
   const clientId=process.env.DISCORD_CLIENT_ID;
