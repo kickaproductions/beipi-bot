@@ -200,21 +200,27 @@ async function pollTwitch(){
  for(const id of twitchStreams.keys())if(!connected.has(id))twitchStreams.delete(id);
  for(let offset=0;offset<ids.length;offset+=100){
   const batch=ids.slice(offset,offset+100);
-  const body=JSON.stringify(batch),timestamp=String(Date.now());
-  const signature=createHmac('sha256',discordToken).update(`beipi-twitch-live-v1\n${timestamp}\n${body}`).digest('hex');
   try{
-   const response=await fetch('https://beipi.app/api/internal/twitch-live',{
-    method:'POST',headers:{'Content-Type':'application/json','X-Beipi-Timestamp':timestamp,'X-Beipi-Signature':signature},
-    body,redirect:'error',signal:AbortSignal.timeout(12_000),
-   });
-   if(!response.ok)throw new Error(`Dashboard Twitch lookup returned ${response.status}`);
-   const streams=await response.json();
+   const streams=await requestTwitchData(batch);
    if(!Array.isArray(streams)||streams.some(stream=>!stream||stream.name!=='Twitch'||!batch.includes(stream.id)))throw new Error('Invalid Twitch status response');
    const liveById=new Map(streams.map(stream=>[stream.id,{...stream,twitchConfirmed:true}]));
    const checkedAt=Date.now();
    for(const id of batch)twitchStreams.set(id,{activity:liveById.get(id)??null,checkedAt});
   }catch(error){console.warn('[twitch-live]',error.message)}
  }
+}
+
+async function requestTwitchData(payload){
+ const body=JSON.stringify(payload),timestamp=String(Date.now());
+ const signature=createHmac('sha256',discordToken).update(`beipi-twitch-live-v1\n${timestamp}\n${body}`).digest('hex');
+ const response=await fetch('https://beipi.app/api/internal/twitch-live',{
+  method:'POST',headers:{'Content-Type':'application/json','X-Beipi-Timestamp':timestamp,'X-Beipi-Signature':signature},
+  body,redirect:'error',signal:AbortSignal.timeout(12_000),
+ });
+ if(!response.ok)throw new Error(`Dashboard Twitch request returned ${response.status}`);
+ const data=await response.json();
+ if(!Array.isArray(data))throw new Error('Invalid dashboard Twitch response');
+ return data;
 }
 function renderTemplate(template,member,activity){const item=pick(randomItems),animal=pick(randomAnimals),dinosaur=pick(randomDinosaurs),values={streamer:member.displayName,title:activity?.details||activity?.state||'A new adventure',game:activity?.state||activity?.details||'something exciting',platform:activity?.name||'their stream',url:activity?.url||'',server:member.guild.name,random_item:item,random_animal:animal,random_dinosaur:dinosaur,random_companion:pick([item,animal,dinosaur])};return (template||creatorDefault).replace(/\{([a-z_]+)\}/g,(match,key)=>values[key]??match).replace(/\n{3,}/g,'\n\n').trim().slice(0,1950)}
 
@@ -247,19 +253,16 @@ async function loadSettings(){
   if(communityTwitchEnabled){
    const pageSize=500;
    for(let offset=0;;offset+=pageSize){
-    const {data,error}=await supabase.from('platform_connections').select('user_id,external_user_id')
+    const {data,error}=await supabase.from('platform_connections').select('user_id')
      .eq('platform','twitch').order('id').range(offset,offset+pageSize-1);
     if(error)throw error;
-    for(const row of data)twitchByUser.set(row.user_id,row.external_user_id);
+    for(const row of data)ruleUsers.add(row.user_id);
     if(data.length<pageSize)break;
    }
   }
-  const userIds=[...new Set([...ruleUsers,...twitchByUser.keys()])];
+  const userIds=[...ruleUsers];
   for(let offset=0;offset<userIds.length;offset+=100){
-   const {data,error}=await supabase.from('platform_connections').select('user_id,platform,external_user_id')
-    .in('platform',communityTwitchEnabled?['discord']:['discord','twitch'])
-    .in('user_id',userIds.slice(offset,offset+100));
-   if(error)throw error;
+   const data=await requestTwitchData({connectionUserIds:userIds.slice(offset,offset+100)});
    for(const connection of data){
     const connections=connection.platform==='twitch'?twitchByUser:discordByUser;
     connections.set(connection.user_id,connection.external_user_id);
