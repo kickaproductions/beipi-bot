@@ -72,7 +72,7 @@ export async function POST(request:NextRequest){
     if(draft.type==='reaction'){
       for(const reaction of draft.reactions){
         const reactionResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}/reactions/${encodeURIComponent(reaction.emoji)}/@me`,{method:'PUT',headers:{Authorization:`Bot ${botToken}`},cache:'no-store'});
-        if(!reactionResponse.ok){await removePublished();return json({error:`Discord could not add ${reaction.emoji}. Use a standard emoji and check B.E.I.P.I.’s Add Reactions permission.`},400)}
+        if(!reactionResponse.ok){await removePublished();return json({error:`Discord could not add ${reaction.emoji}. Choose a standard emoji or one available in this server, and check B.E.I.P.I.’s Add Reactions permission.`},400)}
       }
       const {data:menu,error:menuError}=await supabase.from('discord_reaction_menus').insert({user_id:user.id,guild_id:draft.serverId,guild_name:draft.server,channel_id:channelId,channel_name:channelName,message_id:sent.id,title:draft.title,remove_on_unreact:draft.removeOnUnreact}).select('id').single();
       if(menuError||!menu){await removePublished();return json({error:'The reaction-role menu could not be saved. Run the latest Supabase migration, then try again.'},500)}
