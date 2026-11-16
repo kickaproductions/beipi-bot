@@ -1,5 +1,5 @@
 import {NextRequest,NextResponse} from 'next/server';
-import {draftSchema} from '@/app/discord-schema';
+import {discordDraftError,draftSchema} from '@/app/discord-schema';
 import {DISCORD_MESSAGE_CONTENT_LIMIT} from '@/lib/discord-message-limits';
 import {fetchDiscordGuilds,hasDiscordGuildPermissions,ManageChannels,ManageRoles,ManageServer,selectDiscordSession,type DiscordGuild} from '@/lib/discord-guilds';
 import {createClient} from '@/lib/supabase/server';
@@ -19,7 +19,7 @@ export async function POST(request:NextRequest){
   const session=(await selectDiscordSession())?.session;
   if(!session?.user?.username)return json({error:'Connect Discord before publishing.'},401);
   const parsed=draftSchema.safeParse(await request.json());
-  if(!parsed.success)return json({error:parsed.error.issues[0]?.message||'Check the message details.'},400);
+  if(!parsed.success)return json({error:discordDraftError(parsed.error)},400);
   const draft=parsed.data;
   if(!draft.serverId)return json({error:'Choose a Discord server first.'},400);
   const botToken=process.env.DISCORD_BOT_TOKEN;
