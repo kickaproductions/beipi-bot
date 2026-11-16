@@ -412,6 +412,8 @@ async function goLive(member,activity,rules=[],personal=[]){
  const personalRules=personal.filter(rule=>rule.alert_channel_id);
  if(!community.length&&!personalRules.length)return;
  try{
+  const liveRoles=new Map(community.filter(rule=>rule.live_role_id).map(rule=>[rule.live_role_id,rule]));
+  for(const rule of liveRoles.values())await assignLiveRole(member,rule);
   const {data:existing,error:existingError}=await supabase.from('discord_live_events').select('source_key,channel_id').not('message_id','is',null).eq('guild_id',member.guild.id).eq('member_id',member.id);if(existingError)throw existingError;
   const existingKeys=new Set((existing||[]).map(row=>row.source_key));
   const hasPersonalAlert=[...existingKeys].some(key=>key.startsWith('personal:'));
@@ -420,7 +422,6 @@ async function goLive(member,activity,rules=[],personal=[]){
   const targets=[];
   for(const rule of community){
    const sourceKey=`community:${rule.id}`;
-   if(!hasPersonalAlert&&!existingKeys.has(sourceKey))await assignLiveRole(member,rule);
    if(!usePersonal)targets.push({sourceKey,channelId:rule.alert_channel_id,template:rule.creator_message_template||creatorDefault,roleIds:rule.mention_role_ids||[]});
   }
   // Settings can change mid-stream. Keep the already-announced stream on its original route.
@@ -524,14 +525,26 @@ function queueLive(member,rules,personal){
 
 async function findLiveTwitchMembers(guild,liveMemberIds){
  const ids=liveMemberIds.filter(id=>!guild.members.cache.has(id)&&!missingTwitchMembers.has(`${guild.id}:${id}`));
+ const markMissing=id=>missingTwitchMembers.set(`${guild.id}:${id}`,Date.now()+5*60_000);
  for(let offset=0;offset<ids.length;offset+=100){
   const batch=ids.slice(offset,offset+100);
-  try{
-   const found=await guild.members.fetch({user:batch,time:5_000});
-   const retryAt=Date.now()+5*60_000;
-   for(const id of batch)if(!found.has(id))missingTwitchMembers.set(`${guild.id}:${id}`,retryAt);
-  }catch(error){
-   console.warn('[twitch-members]',guild.id,error.message);
+  if(batch.length>1){
+   try{
+    const found=await guild.members.fetch({user:batch,time:5_000});
+    for(const id of batch)if(!found.has(id))markMissing(id);
+    continue;
+   }catch(error){
+    console.warn('[twitch-members-batch]',guild.id,error.message);
+   }
+  }
+  // Resolve individual members through Discord REST when a gateway batch is unavailable.
+  for(let index=0;index<batch.length;index+=5){
+   await Promise.all(batch.slice(index,index+5).map(async id=>{
+    try{await guild.members.fetch(id)}catch(error){
+     if(Number(error.code)===10007)markMissing(id);
+     else console.warn('[twitch-member]',guild.id,error.message);
+    }
+   }));
   }
  }
 }
