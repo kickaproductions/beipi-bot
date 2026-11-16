@@ -4,8 +4,10 @@ import {DISCORD_MESSAGE_CONTENT_LIMIT} from '@/lib/discord-message-limits';
 import {fetchDiscordGuilds,hasDiscordGuildPermissions,ManageChannels,ManageRoles,ManageServer,selectDiscordSession,type DiscordGuild} from '@/lib/discord-guilds';
 import {createClient} from '@/lib/supabase/server';
 import {describeDiscordReactionError} from '@/lib/discord-reaction-error';
+import {createDiscordReactionBatch} from '@/lib/discord-reaction-batch';
 
 export const runtime='nodejs';
+export const maxDuration=60;
 type Channel={id:string;name:string;type:number};
 
 const json=(data:unknown,status=200)=>NextResponse.json(data,{status,headers:{'Cache-Control':'no-store'}});
@@ -71,8 +73,9 @@ export async function POST(request:NextRequest){
     if(!sent.id)return json({error:'Add a banner or some text before publishing.'},400);
     const removePublished=async()=>{await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}`,{method:'DELETE',headers}).catch(()=>{});if(headerMessageId&&headerMessageId!==sent.id)await fetch(`https://discord.com/api/channels/${channelId}/messages/${headerMessageId}`,{method:'DELETE',headers}).catch(()=>{})};
     if(draft.type==='reaction'){
+      const requestReaction=createDiscordReactionBatch(botToken,channelId,sent.id);
       for(const reaction of draft.reactions){
-        const reactionResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}/reactions/${encodeURIComponent(reaction.emoji)}/@me`,{method:'PUT',headers:{Authorization:`Bot ${botToken}`},cache:'no-store'});
+        const reactionResponse=await requestReaction(reaction.emoji);
         if(!reactionResponse.ok){
           await removePublished();
           const {error,status}=await describeDiscordReactionError(reactionResponse,{emoji:reaction.emoji,guildId:draft.serverId,channelId,botToken});

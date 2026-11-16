@@ -1,9 +1,12 @@
 import {NextRequest} from 'next/server';
 import {createClient} from '@/lib/supabase/server';
 import {describeDiscordReactionError} from '@/lib/discord-reaction-error';
+import {createDiscordReactionBatch} from '@/lib/discord-reaction-batch';
 import {fetchDiscordGuilds,fetchDiscordGuildsWithRefresh,hasDiscordGuildPermissions,ManageRoles,ManageServer,selectDiscordSession,type DiscordGuild} from '@/lib/discord-guilds';
 
 import {highestDiscordRole, roleAssignmentRestriction, type DiscordRole} from '@/lib/discord-role-eligibility';
+
+export const maxDuration=60;
 
 type BotUser={id:string};type GuildMember={roles:string[]};
 export async function PATCH(request:NextRequest,{params}:{params:Promise<{id:string}>}){
@@ -23,9 +26,23 @@ export async function PATCH(request:NextRequest,{params}:{params:Promise<{id:str
   if(!channelResponse.ok||(await channelResponse.json() as {guild_id?:string}).guild_id!==menu.guild_id)return Response.json({error:'That channel is outside the selected server or unavailable.'},{status:403});
   const [rolesResponse,botResponse]=await Promise.all([fetch(`https://discord.com/api/guilds/${menu.guild_id}/roles`,{headers,cache:'no-store'}),fetch('https://discord.com/api/users/@me',{headers,cache:'no-store'})]);if(!rolesResponse.ok||!botResponse.ok)return Response.json({error:'B.E.I.P.I. could not verify those Discord roles.'},{status:502});
   const roles=await rolesResponse.json() as DiscordRole[],bot=await botResponse.json() as BotUser;const memberResponse=await fetch(`https://discord.com/api/guilds/${menu.guild_id}/members/${bot.id}`,{headers,cache:'no-store'});if(!memberResponse.ok)return Response.json({error:'B.E.I.P.I. could not check her role position.'},{status:502});const member=await memberResponse.json() as GuildMember;const botTop=highestDiscordRole(roles,member.roles);const allowed=new Set(roles.filter(role=>!roleAssignmentRestriction(role,menu.guild_id,botTop)).map(role=>role.id));if(reactions.some(item=>!allowed.has(item.roleId)))return Response.json({error:'One of those roles cannot be assigned by B.E.I.P.I. Check the reason next to its name.'},{status:400});
-  for(const old of menu.discord_reaction_role_items||[])await fetch(`https://discord.com/api/channels/${menu.channel_id}/messages/${menu.message_id}/reactions/${encodeURIComponent(old.emoji)}/@me`,{method:'DELETE',headers,cache:'no-store'}).catch(()=>{});
-  for(const item of reactions){const response=await fetch(`https://discord.com/api/channels/${menu.channel_id}/messages/${menu.message_id}/reactions/${encodeURIComponent(item.emoji)}/@me`,{method:'PUT',headers,cache:'no-store'});if(!response.ok){const {error,status}=await describeDiscordReactionError(response,{emoji:item.emoji,guildId:menu.guild_id,channelId:menu.channel_id,botToken:token});return Response.json({error},{status});}}
+  const requestReaction=createDiscordReactionBatch(token,menu.channel_id,menu.message_id);
+  const existingEmoji=new Set((menu.discord_reaction_role_items||[]).map(item=>item.emoji));
+  const newEmoji=new Set(reactions.map(item=>item.emoji));
+  const added:string[]=[];
+  for(const emoji of newEmoji){
+   const response=await requestReaction(emoji);
+   if(!response.ok){
+    for(const addedEmoji of added)await requestReaction(addedEmoji,'DELETE');
+    const {error,status}=await describeDiscordReactionError(response,{emoji,guildId:menu.guild_id,channelId:menu.channel_id,botToken:token});
+    return Response.json({error},{status});
+   }
+   if(!existingEmoji.has(emoji))added.push(emoji);
+  }
   const {error:deleteError}=await supabase.from('discord_reaction_role_items').delete().eq('menu_id',menu.id);if(deleteError)throw deleteError;const {error:insertError}=await supabase.from('discord_reaction_role_items').insert(reactions.map(item=>({menu_id:menu.id,emoji:item.emoji,role_id:item.roleId,role_name:item.roleName})));if(insertError)throw insertError;const {error:updateError}=await supabase.from('discord_reaction_menus').update({remove_on_unreact:body.removeOnUnreact!==false,updated_at:new Date().toISOString()}).eq('id',menu.id).eq('user_id',user.id);if(updateError)throw updateError;
+  for(const emoji of existingEmoji){
+   if(!newEmoji.has(emoji))await requestReaction(emoji,'DELETE');
+  }
   return Response.json({ok:true,reactions,removeOnUnreact:body.removeOnUnreact!==false});
  }catch{return Response.json({error:'The published reaction-role menu could not be updated.'},{status:500})}
 }
