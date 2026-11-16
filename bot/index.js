@@ -11,6 +11,7 @@ const supabase=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVIC
 const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMembers,GatewayIntentBits.GuildPresences,GatewayIntentBits.GuildMessages,GatewayIntentBits.GuildMessageReactions,GatewayIntentBits.DirectMessages],partials:[Partials.Message,Partials.Channel,Partials.Reaction]});
 const settings=new Map();const ownerSettings=new Map();const pendingOffline=new Map();const memberQueues=new Map();const activityCooldown=new Map();const activityCleanup=new Map();let confirmationPollRunning=false;let liveCleanupRunning=false;
 const twitchByMember=new Map();
+let twitchWatchByGuild=new Map();
 const twitchStreams=new Map();
 const missingTwitchMembers=new Map();
 const randomItems=['rubber duck','spatula','traffic cone','emotional-support potato','garden gnome','squeaky hammer','battle spoon','glittery cactus','enchanted teacup','questionable wizard hat'];
@@ -194,8 +195,12 @@ function watchesTwitch(member){
   matchingCommunityRules(member,settings.get(member.guild.id),{discord:false}).length>0;
 }
 
+function twitchIdFor(guildId,memberId){
+ return twitchByMember.get(memberId)||twitchWatchByGuild.get(guildId)?.get(memberId);
+}
+
 function twitchStatusFor(member){
- return twitchStreams.get(twitchByMember.get(member.id));
+ return twitchStreams.get(twitchIdFor(member.guild.id,member.id));
 }
 
 function discordStreamActivity(member,presence=member.presence){
@@ -214,13 +219,14 @@ function streamActivity(member,presence=member.presence){
 function canFinishLive(member){
  const status=twitchStatusFor(member);
  // An unavailable or stale Twitch lookup is different from a confirmed offline stream.
- if(twitchByMember.has(member.id)&&watchesTwitch(member)&&(!status||Date.now()-status.checkedAt>90_000))return false;
+ if(twitchIdFor(member.guild.id,member.id)&&watchesTwitch(member)&&(!status||Date.now()-status.checkedAt>90_000))return false;
  return !streamActivity(member);
 }
 
 async function pollTwitch(){
- const ids=[...new Set(twitchByMember.values())];
- const connected=new Set(ids);
+ const connected=new Set(twitchByMember.values());
+ for(const watch of twitchWatchByGuild.values())for(const id of watch.values())connected.add(id);
+ const ids=[...connected];
  for(const id of twitchStreams.keys())if(!connected.has(id))twitchStreams.delete(id);
  for(let offset=0;offset<ids.length;offset+=100){
   const batch=ids.slice(offset,offset+100);
@@ -309,7 +315,7 @@ async function loadSettings(){
    }
    return verifiedAuthors.get(key);
   }
-  const nextSettings=new Map(),nextOwnerSettings=new Map();
+  const nextSettings=new Map(),nextOwnerSettings=new Map(),nextTwitchWatch=new Map();
   for(const row of communityRows){
    const manager=await ruleManager(row);
    if(!manager)continue;
@@ -322,6 +328,16 @@ async function loadSettings(){
     rules.push({...row,live_role_id:null});
    }else rules.push(row);
    nextSettings.set(row.guild_id,rules);
+   if(row.platform_confirmation_enabled&&Array.isArray(row.twitch_watch)){
+    const watch=nextTwitchWatch.get(row.guild_id)||new Map();
+    for(const pair of row.twitch_watch.slice(0,20)){
+     if(typeof pair?.discordId==='string'&&/^\d{17,20}$/.test(pair.discordId)&&
+      typeof pair.twitchId==='string'&&/^\d{1,20}$/.test(pair.twitchId)&&!watch.has(pair.discordId)){
+      watch.set(pair.discordId,pair.twitchId);
+     }
+    }
+    if(watch.size)nextTwitchWatch.set(row.guild_id,watch);
+   }
   }
   for(const row of ownerRows){
    if(!await ruleManager(row))continue;
@@ -333,6 +349,7 @@ async function loadSettings(){
   for(const [key,rules] of nextSettings)settings.set(key,rules);
   ownerSettings.clear();
   for(const [key,rules] of nextOwnerSettings)ownerSettings.set(key,rules);
+  twitchWatchByGuild=nextTwitchWatch;
   twitchByMember.clear();
   for(const [userId,twitchId] of twitchByUser){
    const discordId=discordByUser.get(userId);
@@ -556,15 +573,20 @@ async function reconcileAll(){
  try{
   await pollTwitch();
   const now=Date.now();
-  const liveMemberIds=[...twitchByMember].filter(([,id])=>{
+  const isLive=([,id])=>{
    const status=twitchStreams.get(id);
    return status?.activity&&now-status.checkedAt<=90_000;
-  }).map(([id])=>id);
+  };
+  const liveMemberIds=[...twitchByMember].filter(isLive).map(([id])=>id);
   for(const [key,retryAt] of missingTwitchMembers)if(retryAt<=now)missingTwitchMembers.delete(key);
   for(const [guildId,rules] of settings){
    const guild=client.guilds.cache.get(guildId);
    if(!guild?.available)continue;
-   if(rules.some(rule=>rule.platform_confirmation_enabled))await findLiveTwitchMembers(guild,liveMemberIds);
+   if(rules.some(rule=>rule.platform_confirmation_enabled)){
+    const watched=[...(twitchWatchByGuild.get(guildId)||[])].filter(([memberId])=>!twitchByMember.has(memberId));
+    const watchedLiveIds=watched.filter(isLive).map(([memberId])=>memberId);
+    await findLiveTwitchMembers(guild,[...liveMemberIds,...watchedLiveIds]);
+   }
    for(const member of guild.members.cache.values()){
     const key=`${guild.id}:${member.id}`;
     if(member.user.bot||ownerSettings.has(key)||!matchingCommunityRules(member,rules).length)continue;
@@ -576,7 +598,7 @@ async function reconcileAll(){
    const [guildId,memberId]=key.split(':');
    const guild=client.guilds.cache.get(guildId);
    if(!guild?.available)continue;
-   const twitchStatus=twitchStreams.get(twitchByMember.get(memberId));
+   const twitchStatus=twitchStreams.get(twitchIdFor(guildId,memberId));
    const member=guild.members.cache.get(memberId)||
     (twitchStatus?.activity&&Date.now()-twitchStatus.checkedAt<=90_000
      ? await guild.members.fetch(memberId).catch(()=>null)
