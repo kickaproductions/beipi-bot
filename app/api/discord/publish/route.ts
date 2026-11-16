@@ -1,5 +1,6 @@
 import {NextRequest,NextResponse} from 'next/server';
 import {draftSchema} from '@/app/discord-schema';
+import {DISCORD_MESSAGE_CONTENT_LIMIT} from '@/lib/discord-message-limits';
 import {fetchDiscordGuilds,hasDiscordGuildPermissions,ManageChannels,ManageRoles,ManageServer,selectDiscordSession,type DiscordGuild} from '@/lib/discord-guilds';
 import {createClient} from '@/lib/supabase/server';
 
@@ -61,8 +62,10 @@ export async function POST(request:NextRequest){
     }
     let sent:{id?:string;message?:string}={id:headerMessageId};
     if(draft.text.trim()){
-      const sendResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages`,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({content:draft.text}),cache:'no-store'});sent=await sendResponse.json() as {id?:string;message?:string};
-      if(!sendResponse.ok||!sent.id){if(headerMessageId)await fetch(`https://discord.com/api/channels/${channelId}/messages/${headerMessageId}`,{method:'DELETE',headers}).catch(()=>{});return json({error:sent.message||'B.E.I.P.I. could not publish there. Check her channel permissions.'},sendResponse.status||502)}
+      const longText=draft.text.length>DISCORD_MESSAGE_CONTENT_LIMIT;
+      const message=longText?{embeds:[{description:draft.text}]}:{content:draft.text};
+      const sendResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages`,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(message),cache:'no-store'});sent=await sendResponse.json() as {id?:string;message?:string};
+      if(!sendResponse.ok||!sent.id){if(headerMessageId)await fetch(`https://discord.com/api/channels/${channelId}/messages/${headerMessageId}`,{method:'DELETE',headers}).catch(()=>{});return json({error:longText&&sendResponse.status===403?'B.E.I.P.I. needs permission to send messages and embed links in this channel.':sent.message||'B.E.I.P.I. could not publish there. Check her channel permissions.'},sendResponse.status||502)}
     }
     if(!sent.id)return json({error:'Add a banner or some text before publishing.'},400);
     const removePublished=async()=>{await fetch(`https://discord.com/api/channels/${channelId}/messages/${sent.id}`,{method:'DELETE',headers}).catch(()=>{});if(headerMessageId&&headerMessageId!==sent.id)await fetch(`https://discord.com/api/channels/${channelId}/messages/${headerMessageId}`,{method:'DELETE',headers}).catch(()=>{})};

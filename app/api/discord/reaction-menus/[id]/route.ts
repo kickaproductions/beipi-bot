@@ -1,6 +1,6 @@
 import {NextRequest} from 'next/server';
 import {createClient} from '@/lib/supabase/server';
-import {fetchDiscordGuilds,hasDiscordGuildPermissions,ManageRoles,ManageServer,selectDiscordSession,type DiscordGuild} from '@/lib/discord-guilds';
+import {fetchDiscordGuilds,fetchDiscordGuildsWithRefresh,hasDiscordGuildPermissions,ManageRoles,ManageServer,selectDiscordSession,type DiscordGuild} from '@/lib/discord-guilds';
 
 import {highestDiscordRole, roleAssignmentRestriction, type DiscordRole} from '@/lib/discord-role-eligibility';
 
@@ -27,4 +27,69 @@ export async function PATCH(request:NextRequest,{params}:{params:Promise<{id:str
   const {error:deleteError}=await supabase.from('discord_reaction_role_items').delete().eq('menu_id',menu.id);if(deleteError)throw deleteError;const {error:insertError}=await supabase.from('discord_reaction_role_items').insert(reactions.map(item=>({menu_id:menu.id,emoji:item.emoji,role_id:item.roleId,role_name:item.roleName})));if(insertError)throw insertError;const {error:updateError}=await supabase.from('discord_reaction_menus').update({remove_on_unreact:body.removeOnUnreact!==false,updated_at:new Date().toISOString()}).eq('id',menu.id).eq('user_id',user.id);if(updateError)throw updateError;
   return Response.json({ok:true,reactions,removeOnUnreact:body.removeOnUnreact!==false});
  }catch{return Response.json({error:'The published reaction-role menu could not be updated.'},{status:500})}
+}
+
+async function discordResourceIsGone(response: Response) {
+ if(response.status!==404)return false;
+ const error=await response.json().catch(()=>null) as {code?:number}|null;
+ return error?.code===10003||error?.code===10008;
+}
+
+export async function DELETE(_request: NextRequest,{params}:{params:Promise<{id:string}>}){
+ const {id}=await params;
+ const supabase=await createClient();
+ const {data:{user}}=await supabase.auth.getUser();
+ if(!user)return Response.json({error:'Sign in to delete reaction roles.'},{status:401});
+
+ const {data:menu,error}=await supabase.from('discord_reaction_menus')
+  .select('id,guild_id,channel_id,message_id').eq('id',id).eq('user_id',user.id).maybeSingle();
+ if(error)return Response.json({error:'The published menu could not be loaded.'},{status:500});
+ if(!menu)return Response.json({error:'That published menu could not be found.'},{status:404});
+
+ try{
+  const session=await selectDiscordSession();
+  if(!session?.session.user?.username)return Response.json({error:'Reconnect Discord to delete reaction roles.'},{status:401});
+  const {response:guildResponse}=await fetchDiscordGuildsWithRefresh(session);
+  if(!guildResponse.ok)return Response.json({error:'Reconnect Discord so B.E.I.P.I. can check your server permissions.'},{status:401});
+  const guilds=await guildResponse.json() as DiscordGuild[];
+  if(!guilds.some(guild=>guild.id===menu.guild_id&&hasDiscordGuildPermissions(guild,ManageServer|ManageRoles))){
+   return Response.json({error:'You need Manage Server and Manage Roles in this Discord server.'},{status:403});
+  }
+
+  const token=process.env.DISCORD_BOT_TOKEN;
+  if(!token)return Response.json({error:'B.E.I.P.I.’s bot token is not configured.'},{status:503});
+  const options={headers:{Authorization:`Bot ${token}`},cache:'no-store'} as const;
+  const channelUrl=`https://discord.com/api/v10/channels/${menu.channel_id}`;
+  const channel=await fetch(channelUrl,options);
+  if(channel.ok){
+   if((await channel.json() as {guild_id?:string}).guild_id!==menu.guild_id){
+    return Response.json({error:'That message is outside the selected server.'},{status:403});
+   }
+   const messageUrl=`${channelUrl}/messages/${menu.message_id}`;
+   const message=await fetch(messageUrl,options);
+   if(message.ok){
+    const identity=await fetch('https://discord.com/api/v10/users/@me',options);
+    if(!identity.ok)return Response.json({error:'B.E.I.P.I. could not verify the message author.'},{status:502});
+    const bot=await identity.json() as BotUser;
+    const published=await message.json() as {author?:{id:string}};
+    if(!bot.id||published.author?.id!==bot.id){
+     return Response.json({error:'B.E.I.P.I. can only delete her own published messages.'},{status:403});
+    }
+    const removed=await fetch(messageUrl,{...options,method:'DELETE'});
+    if(!removed.ok&&!await discordResourceIsGone(removed)){
+     return Response.json({error:'Discord could not delete the message. Check B.E.I.P.I.’s channel access and try again.'},{status:502});
+    }
+   }else if(!await discordResourceIsGone(message)){
+    return Response.json({error:'B.E.I.P.I. could not read the message. Check View Channel and Read Message History.'},{status:502});
+   }
+  }else if(!await discordResourceIsGone(channel)){
+   return Response.json({error:'B.E.I.P.I. could not access the channel. Check View Channel and try again.'},{status:502});
+  }
+
+  const {error:deleteError}=await supabase.from('discord_reaction_menus').delete().eq('id',menu.id).eq('user_id',user.id);
+  if(deleteError)return Response.json({error:'The Discord message is gone, but the saved menu could not be deleted. Try again.'},{status:500});
+  return Response.json({ok:true});
+ }catch{
+  return Response.json({error:'The reaction-role menu could not be deleted. Try again shortly.'},{status:502});
+ }
 }
