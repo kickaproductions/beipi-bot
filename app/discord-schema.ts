@@ -1,3 +1,4 @@
+import { discordRoleTagError } from '@/lib/discord-message-role-tags';
 import { formatDiscordChannelName } from '@/lib/discord-channel-name';
 import { z } from 'zod';
 import { DISCORD_DRAFT_TEXT_LIMIT } from '@/lib/discord-message-limits';
@@ -19,6 +20,8 @@ export const draftSchema=z.object({
     if(!reaction.roleId?.trim())ctx.addIssue({code:'custom',path:['reactions',index,'roleId'],message:'Choose a Discord role.'});
   });
   if(value.type==='channel'&&!value.text.trim()&&!value.bannerId)ctx.addIssue({code:'custom',path:['text'],message:'Add a banner or some text.'});
+  const roleTagError=discordRoleTagError(value.text);
+  if(roleTagError)ctx.addIssue({code:'custom',path:['text'],message:roleTagError});
   const emoji=value.reactions.map(r=>r.emoji);if(new Set(emoji).size!==emoji.length)ctx.addIssue({code:'custom',path:['reactions'],message:'Use a different emoji for each role.'});
 });
 export function discordDraftError(error: z.ZodError){

@@ -1,3 +1,4 @@
+import {discordMessageWithRoleTags} from '@/lib/discord-message-role-tags';
 import {NextRequest,NextResponse} from 'next/server';
 import {discordDraftError,draftSchema} from '@/app/discord-schema';
 import {DISCORD_MESSAGE_CONTENT_LIMIT} from '@/lib/discord-message-limits';
@@ -66,7 +67,7 @@ export async function POST(request:NextRequest){
     let sent:{id?:string;message?:string}={id:headerMessageId};
     if(draft.text.trim()){
       const longText=draft.text.length>DISCORD_MESSAGE_CONTENT_LIMIT;
-      const message=longText?{embeds:[{description:draft.text}]}:{content:draft.text};
+      const message=discordMessageWithRoleTags(draft.text);
       const sendResponse=await fetch(`https://discord.com/api/channels/${channelId}/messages`,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(message),cache:'no-store'});sent=await sendResponse.json() as {id?:string;message?:string};
       if(!sendResponse.ok||!sent.id){if(headerMessageId)await fetch(`https://discord.com/api/channels/${channelId}/messages/${headerMessageId}`,{method:'DELETE',headers}).catch(()=>{});return json({error:longText&&sendResponse.status===403?'B.E.I.P.I. needs permission to send messages and embed links in this channel.':sent.message||'B.E.I.P.I. could not publish there. Check her channel permissions.'},sendResponse.status||502)}
     }
