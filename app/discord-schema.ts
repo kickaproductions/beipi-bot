@@ -6,7 +6,7 @@ export const draftSchema=z.object({
   type:z.enum(['channel','reaction']), title:z.string().trim().min(1,'Add a draft name or choose a channel first.').max(100),
   server:z.string().trim().min(1,'Choose a Discord server.').max(100), mode:z.enum(['existing','new']),
   serverId:z.string().max(30).optional(), channelId:z.string().max(30).optional(),
-  channel:z.string().trim().min(1,'Choose an existing channel or enter a name for the new channel.').max(100), category:z.string().max(100).default(''),
+  channel:z.string().trim().min(1,'Choose an existing channel or enter a name for the new channel.').max(100),
   text:z.string().max(DISCORD_DRAFT_TEXT_LIMIT), bannerId:z.string().uuid().nullable(), bannerAlt:z.string().trim().max(300).default(''),
   reactions:z.array(z.object({emoji:z.string().trim().min(1,'Choose an emoji.').max(100),role:z.string().trim().min(1,'Choose a Discord role.').max(100),roleId:z.string().max(30).optional()})).max(20),
   removeOnUnreact:z.boolean(),

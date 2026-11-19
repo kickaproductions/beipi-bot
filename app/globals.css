@@ -1288,3 +1288,7 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .discord-emoji-status{display:block;padding:6px 8px;color:var(--muted)}
 .discord-reaction-emoji{object-fit:contain;vertical-align:middle}
 @media(max-width:520px){.discord-emoji-library{position:fixed;inset:auto 12px 12px;width:auto}}
+
+.role-tag-suggestions ul{list-style:none;margin:0;padding:4px;border:1px solid currentColor;border-radius:8px}
+.role-tag-suggestions li{padding:6px 10px;border-radius:5px;cursor:pointer}
+.role-tag-suggestions li:hover,.role-tag-suggestions li[aria-selected="true"]{outline:2px solid currentColor;outline-offset:-2px}

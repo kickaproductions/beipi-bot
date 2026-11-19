@@ -38,12 +38,7 @@ export async function POST(request:NextRequest){
     let channelId=draft.channelId;
     let channelName=draft.channel;
     if(draft.mode==='new'){
-      let parentId:string|undefined;
-      if(draft.category.trim()){
-        const channelsResponse=await fetch(`https://discord.com/api/guilds/${draft.serverId}/channels`,{headers:{Authorization:`Bot ${botToken}`},cache:'no-store'});
-        if(channelsResponse.ok){const channels=await channelsResponse.json() as Channel[];parentId=channels.find(channel=>channel.type===4&&channel.name.toLowerCase()===draft.category.trim().toLowerCase())?.id}
-      }
-      const createResponse=await fetch(`https://discord.com/api/guilds/${draft.serverId}/channels`,{method:'POST',headers:{Authorization:`Bot ${botToken}`,'Content-Type':'application/json'},body:JSON.stringify({name:draft.channel,type:0,...(parentId?{parent_id:parentId}:{})}),cache:'no-store'});
+      const createResponse=await fetch(`https://discord.com/api/guilds/${draft.serverId}/channels`,{method:'POST',headers:{Authorization:`Bot ${botToken}`,'Content-Type':'application/json'},body:JSON.stringify({name:draft.channel,type:0}),cache:'no-store'});
       const created=await createResponse.json() as Channel&{message?:string};
       if(!createResponse.ok||!created.id)return json({error:created.message||'B.E.I.P.I. could not create that channel. Check her permissions.'},createResponse.status||502);
       channelId=created.id;channelName=created.name;
