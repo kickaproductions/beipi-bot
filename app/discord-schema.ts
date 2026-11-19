@@ -1,3 +1,4 @@
+import { formatDiscordChannelName } from '@/lib/discord-channel-name';
 import { z } from 'zod';
 import { DISCORD_DRAFT_TEXT_LIMIT } from '@/lib/discord-message-limits';
 export const draftSchema=z.object({
@@ -8,8 +9,11 @@ export const draftSchema=z.object({
   text:z.string().max(DISCORD_DRAFT_TEXT_LIMIT), bannerId:z.string().uuid().nullable(), bannerAlt:z.string().trim().max(300).default(''),
   reactions:z.array(z.object({emoji:z.string().trim().min(1,'Choose an emoji.').max(100),role:z.string().trim().min(1,'Choose a Discord role.').max(100),roleId:z.string().max(30).optional()})).max(20),
   removeOnUnreact:z.boolean(),
-}).superRefine((value,ctx)=>{
-  if(value.mode==='new'&&!/^[a-z0-9_-]+$/.test(value.channel))ctx.addIssue({code:'custom',path:['channel'],message:'Use lowercase letters, numbers, hyphens or underscores for a new channel.'});
+}).transform(value => value.mode === 'new'
+  ? { ...value, channel: formatDiscordChannelName(value.channel).replace(/^-|-$/g, '') }
+  : value
+).superRefine((value,ctx)=>{
+  if(value.mode==='new'&&!value.channel)ctx.addIssue({code:'custom',path:['channel'],message:'Enter a channel name with at least one letter (a–z) or number.'});
   if(value.type==='reaction'&&!value.reactions.length)ctx.addIssue({code:'custom',path:['reactions'],message:'Add at least one emoji and role.'});
   if(value.type==='reaction')value.reactions.forEach((reaction,index)=>{
     if(!reaction.roleId?.trim())ctx.addIssue({code:'custom',path:['reactions',index,'roleId'],message:'Choose a Discord role.'});
