@@ -1306,3 +1306,17 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .schedule-message-editor .live-template textarea{border-top-left-radius:0;border-top-right-radius:0}
 .schedule-message-editor > button{justify-self:start}
 .schedule-message-editor .preview-banner{margin-bottom:12px}
+
+.twitch-week-preview{display:grid;gap:10px}
+.twitch-week-preview h4,.twitch-week-preview p{margin:0}
+.twitch-week-days,.twitch-week-events{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.twitch-week-days{grid-template-columns:repeat(auto-fit,minmax(min(100%,135px),1fr))}
+.twitch-week-day{min-width:0;display:grid;align-content:start;gap:8px;padding:10px;border:1px solid var(--line);border-radius:10px}
+.twitch-week-day>time{font-weight:700}
+.twitch-week-day>small,.twitch-week-event>small{color:var(--muted)}
+.twitch-week-event{display:grid;gap:5px;overflow-wrap:anywhere;padding:8px;border:1px solid var(--line);border-inline-start:3px solid var(--status-accent,var(--line));border-radius:8px}
+.twitch-week-status{justify-self:start;padding:2px 6px;border-radius:5px;font-size:.78rem;color:var(--status-text,var(--ink));background:var(--status-bg,var(--light))}
+.twitch-week-preview [data-tone="confirmed"]{--status-accent:#40aa73;--status-bg:#d8f5e5;--status-text:#145435}
+.twitch-week-preview [data-tone="cancelled"]{--status-accent:#e96273;--status-bg:#ffe1e6;--status-text:#89243b}
+.twitch-week-preview [data-tone="special"]{--status-accent:#ab78d4;--status-bg:#eedfff;--status-text:#582589}
+.twitch-week-preview [data-tone="scheduled"]{--status-bg:var(--light);--status-text:var(--ink)}

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { BellRing, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock, ExternalLink, Pencil, Pin, Plus, Radio, Settings, Trash2, Upload, Users, X } from 'lucide-react';
 import LiveMessageTemplate from './live-message-template';
+import TwitchWeekSharing from './twitch-week-sharing';
 import calendarStyles from './my-crew-calendar.module.css';
 import SharedCrewSpace from './shared-crew-space';
 import TwitchGameField from './twitch-game-field';
@@ -157,6 +158,42 @@ export function PlatformMilestones() {
         setMilestones(data.milestones || []); }).catch(() => setMilestones([])).finally(() => setMilestonesLoading(false)); }, []);
     if (!milestonesLoading && !milestones.length) return null;
     return <section className="crew-imported-milestones" aria-label="Platform milestones">{milestonesLoading ? <span className="crew-milestone-loading">Checking your platforms…</span> : milestones.length ? milestones.map(item => <article key={item.platform + item.label}><span>{item.platform}</span><strong>{item.label}</strong><time dateTime={item.date}>{dateLabel(item.date)}</time></article>) : null}</section>;
+}
+
+function TwitchWeekPreview({streams, statuses, loading}: {
+    streams: CrewItem[];
+    statuses: Record<string, ConfirmationStatus>;
+    loading: boolean;
+}) {
+    const today = new Date();
+    const days = Array.from({length: 7}, (_, index) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + index));
+    const twitchStreams = streams.filter(stream => streamDetails(stream.note).platform.toLowerCase() === 'twitch');
+    return <section className="twitch-week-preview" aria-labelledby="twitch-week-heading">
+        <h4 id="twitch-week-heading">Next 7 days</h4>
+        <p className="stream-confirm-note">Preview of scheduled Twitch streams, starting today in your local time.</p>
+        {loading ? <p role="status">Loading stream statuses…</p> : <ul className="twitch-week-days">
+            {days.map(day => {
+                const key = dayKey(day);
+                const events = twitchStreams.filter(stream => stream.due && dayKey(stream.due) === key);
+                return <li className="twitch-week-day" key={key}>
+                    <time dateTime={key}>{day.toLocaleDateString(undefined, {weekday: 'short', month: 'short', day: 'numeric'})}</time>
+                    {events.length ? <ul className="twitch-week-events">{events.map(stream => {
+                        const status = statuses[stream.id]?.status;
+                        const confirmed = status === 'confirmed';
+                        const cancelled = status === 'cancelled';
+                        const special = stream.pinned && !cancelled;
+                        const tone = cancelled ? 'cancelled' : special ? 'special' : confirmed ? 'confirmed' : 'scheduled';
+                        return <li className="twitch-week-event" data-tone={tone} key={stream.id}>
+                            <strong>{stream.title}</strong>
+                            <small>{new Date(stream.due!).toLocaleTimeString(undefined, {hour: 'numeric', minute: '2-digit'})}</small>
+                            <span className="twitch-week-status" data-tone={cancelled ? 'cancelled' : confirmed ? 'confirmed' : 'scheduled'}>{cancelled ? 'Cancelled' : confirmed ? 'Confirmed' : 'Scheduled'}</span>
+                            {special && <span className="twitch-week-status" data-tone="special">Special stream</span>}
+                        </li>;
+                    })}</ul> : <small>No stream scheduled</small>}
+                </li>;
+            })}
+        </ul>}
+    </section>;
 }
 
 export default function MyCrew({ mode = 'crew', items, busy, inviteOpen, onInviteClose, initialSharedCreatorId = '', streamingAccounts, onCreate, onUpdate, onDelete, onSaved, onSharedItemApproved }: Props) {
@@ -377,7 +414,7 @@ export default function MyCrew({ mode = 'crew', items, busy, inviteOpen, onInvit
      </details>
      <details className="schedule-settings-section live-accordion">
       <summary className="card-heading"><h3>Twitch Extension</h3><ChevronDown size={18} aria-hidden="true"/></summary>
-      <div className="schedule-settings-content"><p className="stream-confirm-note">Twitch extension settings aren’t available yet.</p></div>
+      <div className="schedule-settings-content"><TwitchWeekSharing twitchId={streamingAccounts.twitchId}/><TwitchWeekPreview streams={streams} statuses={confirmationStatuses} loading={confirmationLoading}/></div>
      </details>
      {!confirmationLoading && <div className="stream-confirm-actions"><button className="primary" disabled={confirmationSaving || bannerUploading || (confirmation.holidayMode && (!confirmation.holidayStart || !confirmation.holidayEnd || confirmation.holidayEnd < confirmation.holidayStart)) || (confirmation.enabled && (!discordConnected || (confirmation.postToDiscord && (!confirmation.guildId || !confirmation.channelId || !confirmation.messageTemplate.trim() || !confirmation.cancelMessageTemplate.trim()))))} onClick={() => void saveConfirmation()}>{confirmationSaving ? 'Saving…' : 'Save settings'}</button></div>}
     </div>}</section>
