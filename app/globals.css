@@ -1362,3 +1362,20 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .note-colour-swatches button[aria-pressed=true]{outline:2px solid var(--ink);outline-offset:2px}
 .note-colour-swatches button:focus-visible{outline:2px solid var(--ink);outline-offset:4px}
 .note-colour-picker small{display:block;margin-top:8px}
+
+.rows .checklist-item{position:relative}
+.checklist-tick-overlay{
+  position:absolute;inset:0;z-index:1;display:grid;place-items:center;pointer-events:none;
+}
+.checklist-tick-overlay svg{
+  box-sizing:content-box;padding:9px;border:2px solid currentColor;border-radius:50%;
+  background:#dcfce7;color:#14532d;animation:checklist-tick-pop 620ms ease-out both;
+}
+.high-contrast .checklist-tick-overlay svg{background:var(--bg);color:var(--ink)}
+@keyframes checklist-tick-pop{
+  0%{opacity:0;transform:scale(.65)}
+  25%{opacity:1;transform:scale(1.12)}
+  45%,76%{opacity:1;transform:scale(1)}
+  100%{opacity:0;transform:scale(.94)}
+}
+@media(prefers-reduced-motion:reduce){.checklist-tick-overlay{display:none}}

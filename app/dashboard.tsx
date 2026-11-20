@@ -158,6 +158,14 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     const [avatarUrl,setAvatarUrl] = useState(initialAvatarUrl);
     const [popout, setPopout] = useState(false);
     const [completionCount, setCompletionCount] = useState(0);
+    const [checklistTick, setChecklistTick] = useState<{id:string} | null>(null);
+
+    useEffect(() => {
+        if (!checklistTick) return;
+        const timeout = window.setTimeout(() => setChecklistTick(null), 650);
+        return () => window.clearTimeout(timeout);
+    }, [checklistTick]);
+
     const [visualSettingsOpen, setVisualSettingsOpen] = useState(false);
     const [streamVisuals, setStreamVisuals] = useState(DEFAULT_STREAM_VISUALS);
     const streamVisualsKey = 'beipi-stream-visuals:' + accountId;
@@ -361,7 +369,12 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     async function toggle(item: Item) {
         if (!await request('PATCH', { id: item.id, done: !item.done })) return;
 
-        if (!item.done && (item.kind === 'reminder' || item.kind === 'checklist')) {
+        if (!item.done && item.kind === 'checklist') {
+            if (!reducedMotion && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                setChecklistTick({id:item.id});
+            }
+            setToast('Checklist item complete.');
+        } else if (!item.done && item.kind === 'reminder') {
             setCompletionCount(count => count + 1);
             setToast(COMPLETION_MESSAGE);
         } else {
@@ -479,7 +492,8 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
 
     function rows(list: Item[], compact = false, layout: 'list' | 'grid' = 'list', reorderKind: 'checklist' | 'reminder' | null = null) {
         return <div className={'rows ' + (compact ? 'compact ' : '') + (layout === 'grid' ? 'grid-view' : 'list-view')}>
-            {list.map((item, index) => <article draggable={Boolean(reorderKind)} onDragStart={() => setDraggedItemId(item.id)} onDragEnd={() => setDraggedItemId('')} onDragOver={event => { if (reorderKind) event.preventDefault(); }} onDrop={() => { if (reorderKind) void reorderItems(draggedItemId, item.id, reorderKind); }} className={'item ' + (reorderKind ? 'movable-item ' : '') + (['reminder', 'idea'].includes(item.kind) ? 'custom-colour ' : '') + (item.kind === 'reminder' ? `priority-${item.priority || 'medium'} ` : item.kind === 'idea' ? 'idea-colour ' : '') + (draggedItemId === item.id ? 'dragging ' : '') + (item.done ? 'completed' : '')} style={['reminder', 'idea'].includes(item.kind) ? {'--item-accent': item.colorHex || (item.kind === 'idea' ? '#E4B85A' : '#A679C4')} as CSSProperties : undefined} key={item.id}>
+            {list.map((item, index) => <article draggable={Boolean(reorderKind)} onDragStart={() => setDraggedItemId(item.id)} onDragEnd={() => setDraggedItemId('')} onDragOver={event => { if (reorderKind) event.preventDefault(); }} onDrop={() => { if (reorderKind) void reorderItems(draggedItemId, item.id, reorderKind); }} className={'item ' + (reorderKind ? 'movable-item ' : '') + (['reminder', 'idea'].includes(item.kind) ? 'custom-colour ' : '') + (item.kind === 'reminder' ? `priority-${item.priority || 'medium'} ` : item.kind === 'idea' ? 'idea-colour ' : '') + (draggedItemId === item.id ? 'dragging ' : '') + (item.kind === 'checklist' ? 'checklist-item ' : '') + (item.done ? 'completed' : '')} style={['reminder', 'idea'].includes(item.kind) ? {'--item-accent': item.colorHex || (item.kind === 'idea' ? '#E4B85A' : '#A679C4')} as CSSProperties : undefined} key={item.id}>
+                {item.done && checklistTick?.id === item.id && !reducedMotion && <span className="checklist-tick-overlay" aria-hidden="true"><Check size={28} strokeWidth={3}/></span>}
                 {reorderKind && <span className="drag-handle" title="Drag to move"><GripVertical size={17}/></span>}
                 <button className="check" aria-label={(item.done ? 'Reopen ' : 'Complete ') + item.title} disabled={busy} onClick={() => toggle(item)}>{item.done && <Check size={14}/>}</button>
                 <div className="item-text"><div className="item-title-line">{['reminder', 'idea'].includes(item.kind) && <span className="item-colour-dot" aria-hidden="true"/>}<strong>{item.title}</strong>{item.kind === 'reminder' && <span className={'priority-pill ' + (item.priority || 'medium')}>{item.priority || 'medium'}</span>}</div>{item.note && <p>{item.note}</p>}{(item.due || item.kind === 'connection' || item.kind === 'checklist' || item.sharedAddedByName) && <small>{item.due ? <><Clock size={12}/> {new Date(item.due).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</> : item.kind === 'connection' ? 'Saved reference · Not connected' : item.kind === 'checklist' ? item.createdByPip ? 'Saved by Pip' : 'Saved by you' : null}{item.sharedAddedByName && <>{item.due ? ' · ' : ''}Added by {item.sharedAddedByName}</>}</small>}</div>
@@ -549,7 +563,7 @@ export default function Dashboard({ accountId = '', userName = 'Creator', initia
     <p>Artwork appears when the scheduled game name matches a Twitch category.</p>
   </fieldset>}
   {activeChecklist.length > 0 && <div className="checklist-summary"><span>{activeChecked} of {activeChecklist.length} steps complete</span><button className="text-button" disabled={busy} onClick={() => void resetChecklist()}><RotateCcw size={14}/> Reset this checklist</button></div>}
-  {(() => { const list = activeChecklist.filter(i => filter === 'all' || i.done === (filter === 'done')); return list.length ? rows(list, false, checklistLayout, 'checklist') : activeChecklist.length ? <div className="empty"><Check size={28}/><h3>{filter === 'done' ? 'Nothing completed yet.' : 'You’re all caught up.'}</h3><p>Your saved steps are still in the other tabs.</p></div> : empty('checklist'); })()}
+  {(() => { const list = activeChecklist.filter(i => filter === 'all' || i.done === (filter === 'done') || (!reducedMotion && filter === 'open' && i.id === checklistTick?.id)); return list.length ? rows(list, false, checklistLayout, 'checklist') : activeChecklist.length ? <div className="empty"><Check size={28}/><h3>{filter === 'done' ? 'Nothing completed yet.' : 'You’re all caught up.'}</h3><p>Your saved steps are still in the other tabs.</p></div> : empty('checklist'); })()}
  </section>}
  {streamTab === 'schedule' && <MyCrew mode="schedule" inviteOpen={false} onInviteClose={() => undefined} initialSharedCreatorId="" items={items} busy={busy} streamingAccounts={{ twitch: twitch.connected ? twitch.user?.login || '' : '', twitchId: twitch.connected ? twitch.user?.id || '' : '', twitchDisplayName: twitch.connected ? twitch.user?.displayName || '' : '', twitchAvatarUrl: twitch.connected ? twitch.user?.profileImageUrl || '' : '', youtube: google.connected ? (google.channel?.handle || google.channel?.title || '') : '' }} onCreate={async (item) => request('POST', item)} onUpdate={async (id, item) => request('PATCH', { id, ...item })} onDelete={async (id) => { if (confirm('Delete this scheduled stream?')) await request('DELETE', undefined, id); }} onSaved={setToast}/>} 
  {streamTab === 'analytics' && <section className="card full analytics-empty"><span className="stat-icon lavender"><BarChart3 size={24}/></span><h2>Your analytics will live here.</h2><p>Once more streaming platforms are securely connected, B.E.I.P.I. will bring your recent stream performance together without making the page feel overwhelming.</p><div className="analytics-placeholders"><span /><span /><span /><span /><span /><span /></div><button className="outline" onClick={() => change('Connections')}>Manage connections <ArrowUpRight size={15}/></button></section>}</>}
