@@ -42,12 +42,13 @@ function renderConfirmationMessage(template,stream,details,config,nextStream=nul
  return source.replaceAll('@{role}',config.role_id?roleMention:'').replaceAll('{role}',config.role_name||'').replace(/\{(username|game|title|platform|embed|lead_time|date and time|next_stream)\}/g,(_,key)=>values[key]||'').replace(/\n{3,}/g,'\n\n').trim().slice(0,1950);
 }
 const confirmationButtons=(streamId, allowEditing=true)=>new ActionRowBuilder().addComponents(
- new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:yes`).setLabel('Yes, I’m streaming').setStyle(ButtonStyle.Success),
- new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:no`).setLabel('No, cancel it').setStyle(ButtonStyle.Secondary),
- ...(allowEditing?[
-  new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:edit-yes`).setLabel('Edit & confirm').setStyle(ButtonStyle.Primary),
-  new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:edit-no`).setLabel('Edit & cancel').setStyle(ButtonStyle.Secondary)
- ]:[])
+ new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:yes`).setLabel('Confirm stream').setStyle(ButtonStyle.Success),
+ new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:no`).setLabel('Cancel stream').setStyle(ButtonStyle.Secondary),
+ ...(allowEditing?[new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:edit`).setLabel('Edit before sending').setStyle(ButtonStyle.Primary)]:[])
+);
+const confirmationEditChoices=streamId=>new ActionRowBuilder().addComponents(
+ new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:edit-yes`).setLabel('Edit confirmation').setStyle(ButtonStyle.Primary),
+ new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:edit-no`).setLabel('Edit cancellation').setStyle(ButtonStyle.Secondary)
 );
 
 async function processStreamConfirmations(){
@@ -97,21 +98,24 @@ async function handleStreamConfirmation(interaction){
  const isEdit=interaction.isModalSubmit()&&interaction.isFromMessage();
  if(!(interaction.isButton()||isEdit)||!interaction.customId.startsWith('stream-confirm:'))return;
  const [,streamId,action]=interaction.customId.split(':');
- if(!streamId||!['yes','no','edit-yes','edit-no'].includes(action))return;
- const openingEditor=interaction.isButton()&&action.startsWith('edit-');
+ const editorAction=action==='edit-yes'||action==='edit-no';
+ if(!streamId||!(isEdit?editorAction:editorAction||['yes','no','edit'].includes(action)))return;
+ const choosingEditor=action==='edit';
+ const openingEditor=!isEdit&&editorAction;
+ const needsImmediateReply=choosingEditor||openingEditor;
  const status=action.endsWith('yes')?'confirmed':'cancelled';
  const editedContent=isEdit?interaction.fields.getTextInputValue('announcement').trim():null;
  if(isEdit&&!editedContent){await interaction.reply({content:'Enter a message before sending your answer.'});return}
- if(!openingEditor)await interaction.deferUpdate();
+ if(!needsImmediateReply)await interaction.deferUpdate();
  const {data:run,error:runError}=await supabase.from('stream_confirmation_runs').select('*').eq('stream_id',streamId).eq('discord_user_id',interaction.user.id).maybeSingle();
  if(runError||!run||run.dm_message_id!==interaction.message.id){
   const content='I could not match this confirmation to your schedule.';
-  if(openingEditor)await interaction.reply({content});else await interaction.followUp({content});
+  if(needsImmediateReply)await interaction.reply({content});else await interaction.followUp({content});
   return;
  }
  if(run.status!=='pending'){
   const content='This stream has already been answered or is being processed.';
-  if(openingEditor)await interaction.reply({content});else await interaction.followUp({content});
+  if(needsImmediateReply)await interaction.reply({content});else await interaction.followUp({content});
   return;
  }
  const [{data:stream},{data:config}]=await Promise.all([
@@ -120,10 +124,15 @@ async function handleStreamConfirmation(interaction){
  ]);
  if(!stream||!config){
   const content='I couldn’t find your schedule settings. Please try again.';
-  if(openingEditor)await interaction.reply({content});else await interaction.followUp({content});
+  if(needsImmediateReply)await interaction.reply({content});else await interaction.followUp({content});
   return;
  }
  const canPost=config.post_to_discord!==false;
+ if(choosingEditor){
+  if(!canPost){await interaction.reply({content:'Discord posting is off for this schedule.'});return}
+  await interaction.update({components:[confirmationButtons(streamId),confirmationEditChoices(streamId)]});
+  return;
+ }
  const details=streamDetails(stream.note);
  const nextStream=status==='cancelled'&&editedContent===null?(await supabase.from('companion_items').select('title,due').eq('user_id',run.user_id).eq('kind','crew-stream').eq('done',false).gt('due',stream.due).order('due',{ascending:true}).limit(1).maybeSingle()).data:null;
  const template=status==='confirmed'?config.message_template:config.cancel_message_template||defaultCancellationMessage;
@@ -132,7 +141,7 @@ async function handleStreamConfirmation(interaction){
   if(!canPost){await interaction.reply({content:'Discord posting is off for this schedule.'});return}
   const input=new TextInputBuilder().setCustomId('announcement').setLabel('Discord announcement for this stream').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(2000);
   if(content)input.setValue(content);
-  const modal=new ModalBuilder().setCustomId(interaction.customId).setTitle(status==='confirmed'?'Edit and send confirmation':'Edit and send cancellation').addComponents(new ActionRowBuilder().addComponents(input));
+  const modal=new ModalBuilder().setCustomId(interaction.customId).setTitle(status==='confirmed'?'Send confirmation':'Send cancellation').addComponents(new ActionRowBuilder().addComponents(input));
   await interaction.showModal(modal);
   return;
  }
@@ -175,7 +184,7 @@ async function handleStreamConfirmation(interaction){
     :code===10003
      ?'Discord can no longer find this channel. Re-select the scheduling channel in My Crew → Confirmations.'
      :`Discord returned: ${String(detail).slice(0,180)}`;
-  await interaction.editReply({content:`${interaction.message.content}\n\n**I couldn’t post in #${config.channel_name||'the selected channel'} yet. ${help} Then press your answer again.**`,components:[confirmationButtons(streamId)]}).catch(()=>{});
+  await interaction.editReply({content:`${interaction.message.content}\n\n**I couldn’t post in #${config.channel_name||'the selected channel'} yet. ${help} Then press your answer again.**`,components:isEdit?[confirmationButtons(streamId),confirmationEditChoices(streamId)]:[confirmationButtons(streamId)]}).catch(()=>{});
   console.error('[stream-confirmation-post]',error);
   await logActivity(config.guild_id,'stream_confirmation_error','error','Stream confirmation could not be posted',detail,{streamId,channelId:config.channel_id});
  }
