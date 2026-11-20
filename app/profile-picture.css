@@ -1,0 +1,6 @@
+.profile-avatar-image{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}
+.profile-picture-controls{display:grid;gap:8px;min-width:0}
+.profile-picture-controls>div{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.profile-picture-controls select{max-width:100%;padding:.55em;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;font:inherit}
+.profile-picture-file{display:grid;gap:6px}
+.profile-picture-file input{max-width:100%}
