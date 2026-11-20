@@ -161,7 +161,7 @@ export default function AccountPortal(){
   return <main className="account-shell">
     <a href="/" className="account-back"><ArrowLeft size={16}/> Back to B.E.I.P.I.</a>
     <section className="account-card">
-      <div className="account-brand"><img src="/beipi-account-logo.png" alt="B.E.I.P.I. Bot mascot logo"/><div><strong>B.E.I.P.I.</strong><small>Your streaming companion</small></div></div>
+      <div className="account-brand"><img src="/beipi-bot-badge.png" alt="B.E.I.P.I. Bot mascot logo"/><div><strong>B.E.I.P.I.</strong><small>Your streaming companion</small></div></div>
       {!configured?<div className="account-state"><ShieldCheck size={31}/><h1>Accounts are nearly ready.</h1><p>Connect B.E.I.P.I.’s account database to finish this setup.</p></div>
       :locked?<div className="account-state"><ShieldCheck size={31}/><h1>Account locked.</h1><p>Your account has been locked for security. Please contact <a href="mailto:help@beipi.app">help@beipi.app</a> for assistance.</p><button className="outline" disabled={busy} onClick={()=>void signOut()}><LogOut size={16}/> Sign out</button></div>
       :suspended?<div className="account-state"><ShieldCheck size={31}/><h1>Account suspended.</h1><p>Dashboard access is paused. Contact B.E.I.P.I. support if you believe this is a mistake.</p><button className="outline" disabled={busy} onClick={()=>void signOut()}><LogOut size={16}/> Sign out</button></div>

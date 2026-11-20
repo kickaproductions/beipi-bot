@@ -69,7 +69,7 @@ export default function ResetPasswordPortal(){
   return <main className="account-shell">
     <a href="/account" className="account-back"><ArrowLeft size={16}/> Back to login</a>
     <section className="account-card">
-      <div className="account-brand"><img src="/beipi-account-logo.png" alt="B.E.I.P.I. Bot mascot logo"/><div><strong>B.E.I.P.I.</strong><small>Your streaming companion</small></div></div>
+      <div className="account-brand"><img src="/beipi-bot-badge.png" alt="B.E.I.P.I. Bot mascot logo"/><div><strong>B.E.I.P.I.</strong><small>Your streaming companion</small></div></div>
       <span className="account-kicker">SECURE ACCOUNT RECOVERY</span>
       <h1>Choose a new password</h1>
       <p className="account-lead">Make it memorable to you and difficult for anyone else to guess.</p>
