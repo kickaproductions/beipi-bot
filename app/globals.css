@@ -1346,3 +1346,5 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 }
 .home-checklist-progress{min-width:3.5rem;text-align:right}
 .home-checklist-progress .progress{margin:5px 0 0}
+
+.item-library > .card-heading + .rows.grid-view{padding-top:14px}
