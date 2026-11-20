@@ -1,6 +1,6 @@
 import {createClient} from '@/lib/supabase/server';
 
-export type Platform='twitch'|'discord'|'google';
+export type Platform='twitch'|'discord'|'google'|'tiktok';
 
 type ConnectionInput={
   platform:Platform;
