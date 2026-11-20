@@ -1292,3 +1292,6 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .role-tag-suggestions ul{list-style:none;margin:0;padding:4px;border:1px solid currentColor;border-radius:8px}
 .role-tag-suggestions li{padding:6px 10px;border-radius:5px;cursor:pointer}
 .role-tag-suggestions li:hover,.role-tag-suggestions li[aria-selected="true"]{outline:2px solid currentColor;outline-offset:-2px}
+
+.crew-schedule-header-actions{display:flex;align-items:center;gap:8px}
+.crew-schedule-settings-view{width:100%;max-width:800px}
