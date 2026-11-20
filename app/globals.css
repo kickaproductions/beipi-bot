@@ -1320,3 +1320,15 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .twitch-week-preview [data-tone="cancelled"]{--status-accent:#e96273;--status-bg:#ffe1e6;--status-text:#89243b}
 .twitch-week-preview [data-tone="special"]{--status-accent:#ab78d4;--status-bg:#eedfff;--status-text:#582589}
 .twitch-week-preview [data-tone="scheduled"]{--status-bg:var(--light);--status-text:var(--ink)}
+
+.twitch-panel-appearance{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,320px);gap:20px;align-items:start;padding:16px;border:1px solid var(--line);border-radius:12px}
+.twitch-panel-controls{min-width:0;display:grid;gap:10px;margin:0;padding:0;border:0}
+.twitch-panel-controls legend{padding:0 0 10px;font-weight:700}
+.twitch-panel-controls label{display:grid;gap:6px}
+.twitch-panel-controls :is(select,input[type="text"]){width:100%;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);padding:8px}
+.twitch-panel-controls input[type="color"]{width:44px;height:36px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.twitch-panel-controls .twitch-panel-pip-toggle{display:flex;align-items:center}
+.twitch-panel-controls button{justify-self:start}
+.twitch-panel-preview{display:grid;gap:6px;color:var(--muted)}
+.twitch-panel-preview iframe{display:block;width:100%;height:300px;border:1px solid var(--line);border-radius:10px}
+@media(max-width:760px){.twitch-panel-appearance{grid-template-columns:minmax(0,1fr)}}

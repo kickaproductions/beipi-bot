@@ -2,6 +2,7 @@
 
 import {useEffect,useState} from 'react';
 import {ExternalLink} from 'lucide-react';
+import TwitchPanelAppearanceSettings from './twitch-panel-appearance';
 
 export default function TwitchWeekSharing({twitchId}:{twitchId:string}){
     const [broadcasterId,setBroadcasterId]=useState<string|null>(null);
@@ -56,5 +57,6 @@ export default function TwitchWeekSharing({twitchId}:{twitchId:string}){
         {visible&&<div>
             <a className="outline" href={'/twitch-schedule/index.html?channel='+broadcasterId} target="_blank" rel="noopener noreferrer">Open public schedule <ExternalLink size={14}/></a>
         </div>}
+        <TwitchPanelAppearanceSettings/>
     </div>;
 }

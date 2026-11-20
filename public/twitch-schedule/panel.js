@@ -2,6 +2,8 @@
 
 const streamList = document.querySelector('#streams');
 const statusMessage = document.querySelector('#status');
+const headerTitle = document.querySelector('#panel-title');
+const pip = document.querySelector('#pip');
 const labels = { scheduled: 'Scheduled', confirmed: 'Confirmed', cancelled: 'Cancelled', special: 'Special stream' };
 const formatter = new Intl.DateTimeFormat(undefined, {
   weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
@@ -21,6 +23,16 @@ function badge(tone) {
   const node = element('span', labels[tone], 'badge');
   node.dataset.tone = tone;
   return node;
+}
+
+function applyAppearance(appearance) {
+  if (!appearance || typeof appearance !== 'object') return;
+  const {theme, accent, title, showPip, layout} = appearance;
+  if (['violet', 'lavender', 'midnight'].includes(theme)) document.documentElement.dataset.theme = theme;
+  if (typeof accent === 'string' && /^#[0-9a-f]{6}$/i.test(accent)) document.documentElement.style.setProperty('--accent-colour', accent);
+  headerTitle.textContent = typeof title === 'string' && title.trim() ? title.trim().slice(0, 50) : 'This week on stream';
+  pip.hidden = showPip === false;
+  document.documentElement.dataset.layout = layout === 'roomy' ? 'roomy' : 'compact';
 }
 
 function render(streams) {
@@ -62,6 +74,7 @@ async function refresh() {
     if (!response.ok || !Array.isArray(data.streams)) {
       throw Error(response.status === 404 ? 'This channel hasn’t shared its schedule.' : 'The schedule is temporarily unavailable.');
     }
+    applyAppearance(data.appearance);
     render(data.streams);
   } catch (error) {
     if (request.signal.aborted) return;
@@ -71,7 +84,21 @@ async function refresh() {
   }
 }
 
-if (window.self !== window.top && window.Twitch?.ext) {
+const preview = new URLSearchParams(window.location.search).get('preview') === 'appearance';
+if (preview && window.self !== window.top && !window.location.hostname.endsWith('.ext-twitch.tv')) {
+  window.addEventListener('message', event => {
+    if (event.origin === window.location.origin && event.source === window.parent && event.data?.type === 'beipi-panel-appearance') {
+      applyAppearance(event.data.appearance);
+    }
+  });
+  const sampleDate = new Date();
+  sampleDate.setDate(sampleDate.getDate() + 1);
+  sampleDate.setHours(19, 0, 0, 0);
+  render([
+    {date: sampleDate.toISOString(), title: 'Community game night', game: 'Phasmophobia', status: 'confirmed', special: true},
+    {date: new Date(sampleDate.getFullYear(), sampleDate.getMonth(), sampleDate.getDate()+1,19).toISOString(), title: 'Cozy farming stream', game: 'Stardew Valley', status: 'cancelled'},
+  ]);
+} else if (window.self !== window.top && window.Twitch?.ext) {
   window.Twitch.ext.onAuthorized(({channelId}) => {
     broadcasterId = channelId;
     void refresh();

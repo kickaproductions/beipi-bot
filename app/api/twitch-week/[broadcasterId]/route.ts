@@ -1,3 +1,4 @@
+import {readTwitchPanelAppearance} from '@/lib/twitch-panel-appearance';
 import {decryptSession} from '@/app/api/auth/twitch/session';
 import {createAdminClient} from '@/lib/supabase/admin';
 
@@ -26,7 +27,11 @@ export async function GET(request:Request,{params}:{params:Promise<{broadcasterI
     if(connectionError)throw connectionError;
     if(!connection||decryptSession(connection.encrypted_session||'')?.user.id!==broadcasterId)return json({error:'This channel has not shared its schedule.'},404);
 
-    const {data:streams,error:streamError}=await db.from('companion_items').select('id,title,note,due,pinned').eq('user_id',userId).eq('kind','crew-stream').gte('due',new Date(start).toISOString()).lt('due',new Date(end).toISOString()).order('due').limit(100);
+    const [{data:design},{data:streams,error:streamError}]=await Promise.all([
+      db.from('twitch_panel_appearance').select('appearance').eq('user_id',userId).maybeSingle(),
+      db.from('companion_items').select('id,title,note,due,pinned').eq('user_id',userId).eq('kind','crew-stream').gte('due',new Date(start).toISOString()).lt('due',new Date(end).toISOString()).order('due').limit(100),
+    ]);
+    const appearance=readTwitchPanelAppearance(design?.appearance);
     if(streamError)throw streamError;
     const twitchStreams=streams.flatMap(stream=>{
       let platform=stream.note||'Twitch',game='';
@@ -36,11 +41,11 @@ export async function GET(request:Request,{params}:{params:Promise<{broadcasterI
       }catch{}
       return platform.toLowerCase()==='twitch'?[{id:stream.id,title:stream.title,game,date:stream.due,special:Boolean(stream.pinned)}]:[];
     });
-    if(!twitchStreams.length)return json({streams:[]});
+    if(!twitchStreams.length)return json({streams:[],appearance});
     const {data:runs,error:runError}=await db.from('stream_confirmation_runs').select('stream_id,status').eq('user_id',userId).in('stream_id',twitchStreams.map(stream=>stream.id));
     if(runError)throw runError;
     const statuses=new Map(runs.map(run=>[run.stream_id,run.status]));
-    return json({streams:twitchStreams.map(({id,...stream})=>{
+    return json({appearance,streams:twitchStreams.map(({id,...stream})=>{
       const status=statuses.get(id);
       return {...stream,status:status==='confirmed'||status==='cancelled'?status:'scheduled'};
     })});
