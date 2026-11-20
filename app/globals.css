@@ -1294,11 +1294,15 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .role-tag-suggestions li:hover,.role-tag-suggestions li[aria-selected="true"]{outline:2px solid currentColor;outline-offset:-2px}
 
 .crew-schedule-header-actions{display:flex;align-items:center;gap:8px}
-.crew-schedule-settings-view{width:100%;max-width:800px}
+.crew-schedule-settings-view{width:100%;min-width:0}
 
 .schedule-settings-section{border:1px solid var(--line);border-radius:10px}
 .schedule-settings-section h3{display:flex;align-items:center;gap:8px;margin:0;font-size:.95rem}
-.schedule-settings-content{display:grid;gap:14px;padding:16px}
-.schedule-message-editor{display:grid;gap:10px}
+.schedule-settings-content{display:grid;grid-template-columns:minmax(0,1fr);gap:20px;padding:clamp(14px,3vw,24px)}
+.form-fields.schedule-message-editor{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:0}
+.schedule-message-editor .live-template,.form-fields.schedule-message-editor > .upload-zone{margin:0}
+.shell .schedule-message-editor .upload-zone strong{font-size:.95rem;font-weight:650}
+.shell .schedule-message-editor .upload-zone small{font-size:.78rem!important}
+.schedule-message-editor .live-template textarea{border-top-left-radius:0;border-top-right-radius:0}
 .schedule-message-editor > button{justify-self:start}
 .schedule-message-editor .preview-banner{margin-bottom:12px}

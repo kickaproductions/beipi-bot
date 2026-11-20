@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { BellRing, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock, ExternalLink, Pencil, Pin, Plus, Radio, Settings, Trash2, Users, X } from 'lucide-react';
+import { BellRing, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Clock, ExternalLink, Pencil, Pin, Plus, Radio, Settings, Trash2, Upload, Users, X } from 'lucide-react';
 import LiveMessageTemplate from './live-message-template';
 import calendarStyles from './my-crew-calendar.module.css';
 import SharedCrewSpace from './shared-crew-space';
@@ -366,8 +366,8 @@ export default function MyCrew({ mode = 'crew', items, busy, inviteOpen, onInvit
       ] as const).map(({ label, field, bannerField, details }) => {
        const bannerId = confirmation[bannerField];
        const banner = bannerId ? <img className="preview-banner" src={'/api/banners/' + bannerId} alt="Schedule announcement banner"/> : undefined;
-       return <div className="schedule-message-editor" key={field}>
-        <label className="upload-zone"><strong>{label} banner</strong><small>Optional · PNG, JPEG, WebP or GIF · up to 5 MB</small><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={bannerUploading || confirmationSaving} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) void uploadConfirmationBanner(bannerField, file); }}/></label>
+       return <div className="form-fields schedule-message-editor" key={field}>
+        <label className="upload-zone"><Upload size={21} aria-hidden="true"/><strong>{bannerId ? 'Replace' : 'Upload'} {field === 'messageTemplate' ? 'reminder' : 'cancellation'} banner</strong><small>Optional · PNG, JPEG, WebP or GIF · up to 5 MB</small><input type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={bannerUploading || confirmationSaving} onChange={event => { const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (file) void uploadConfirmationBanner(bannerField, file); }}/></label>
         {bannerId && <button className="outline" type="button" disabled={bannerUploading || confirmationSaving} onClick={() => setConfirmation(current => ({ ...current, [bannerField]: null }))}>Remove {field === 'messageTemplate' ? 'reminder' : 'cancellation'} banner</button>}
         <LiveMessageTemplate label={label} value={confirmation[field]} onChange={value => setConfirmation(current => ({ ...current, [field]: value }))} identity={{ name: streamingAccounts.twitchDisplayName || streamingAccounts.twitch || 'Streamer' }} detailsOptions={details} previewDetails={{ username: streamingAccounts.twitchDisplayName || streamingAccounts.twitch || 'Streamer', lead_time: confirmation.leadMinutes === 60 ? '1 hour' : confirmation.leadMinutes + ' minutes', embed: 'https://twitch.tv/' + (streamingAccounts.twitch || 'your-channel'), role: confirmation.roleName || 'Stream Squad', 'date and time': 'Sunday at 7:00 pm' }} maxLength={2000} banner={banner} help="Pip fills in the stream details when posting your answer."/>
        </div>;
