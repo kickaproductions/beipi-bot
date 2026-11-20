@@ -290,8 +290,7 @@ async function loadSettings(){
    }),
   ]);
   const ruleUsers=new Set([...ownerRows,...communityRows].map(row=>row.user_id));
-  const communityTwitchEnabled=communityRows.some(rule=>rule.platform_confirmation_enabled);
-  if(communityTwitchEnabled){
+  if(communityRows.length){
    const pageSize=500;
    for(let offset=0;;offset+=pageSize){
     const {data,error}=await supabase.from('platform_connections').select('user_id')
@@ -328,7 +327,7 @@ async function loadSettings(){
     rules.push({...row,live_role_id:null});
    }else rules.push(row);
    nextSettings.set(row.guild_id,rules);
-   if(row.platform_confirmation_enabled&&Array.isArray(row.twitch_watch)){
+   if(Array.isArray(row.twitch_watch)){
     const watch=nextTwitchWatch.get(row.guild_id)||new Map();
     for(const pair of row.twitch_watch.slice(0,20)){
      if(typeof pair?.discordId==='string'&&/^\d{17,20}$/.test(pair.discordId)&&
@@ -363,7 +362,7 @@ async function loadSettings(){
 function serial(key,task){const previous=memberQueues.get(key)||Promise.resolve();const next=previous.catch(()=>{}).then(task).finally(()=>{if(memberQueues.get(key)===next)memberQueues.delete(key)});memberQueues.set(key,next);return next;}
 
 const matchingCommunityRules=(member,rules=[],{discord=true,twitch=true}={})=>rules.filter(rule=>
- ((discord&&rule.discord_presence_enabled)||(twitch&&rule.platform_confirmation_enabled))&&
+ (discord||twitch)&&
  (!rule.creator_role_id||member.roles.cache.has(rule.creator_role_id)));
 
 async function assignLiveRole(member,rule){
@@ -582,11 +581,9 @@ async function reconcileAll(){
   for(const [guildId,rules] of settings){
    const guild=client.guilds.cache.get(guildId);
    if(!guild?.available)continue;
-   if(rules.some(rule=>rule.platform_confirmation_enabled)){
-    const watched=[...(twitchWatchByGuild.get(guildId)||[])].filter(([memberId])=>!twitchByMember.has(memberId));
-    const watchedLiveIds=watched.filter(isLive).map(([memberId])=>memberId);
-    await findLiveTwitchMembers(guild,[...liveMemberIds,...watchedLiveIds]);
-   }
+   const watched=[...(twitchWatchByGuild.get(guildId)||[])].filter(([memberId])=>!twitchByMember.has(memberId));
+   const watchedLiveIds=watched.filter(isLive).map(([memberId])=>memberId);
+   await findLiveTwitchMembers(guild,[...liveMemberIds,...watchedLiveIds]);
    for(const member of guild.members.cache.values()){
     const key=`${guild.id}:${member.id}`;
     if(member.user.bot||ownerSettings.has(key)||!matchingCommunityRules(member,rules).length)continue;
