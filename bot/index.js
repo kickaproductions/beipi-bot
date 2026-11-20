@@ -1,4 +1,4 @@
-import {ActionRowBuilder,ActivityType,ButtonBuilder,ButtonStyle,Client,Events,GatewayIntentBits,Partials,PermissionFlagsBits,Routes} from 'discord.js';
+import {ActionRowBuilder,ActivityType,ButtonBuilder,ButtonStyle,Client,Events,GatewayIntentBits,ModalBuilder,Partials,PermissionFlagsBits,Routes,TextInputBuilder,TextInputStyle} from 'discord.js';
 import {createClient} from '@supabase/supabase-js';
 import {createHmac} from 'node:crypto';
 
@@ -41,9 +41,13 @@ function renderConfirmationMessage(template,stream,details,config,nextStream=nul
  if(!nextStream)source=source.split('\n').filter(line=>!line.includes('{date and time}')&&!line.includes('{next_stream}')).join('\n').replace(/\n{3,}/g,'\n\n');
  return source.replaceAll('@{role}',config.role_id?roleMention:'').replaceAll('{role}',config.role_name||'').replace(/\{(username|game|title|platform|embed|lead_time|date and time|next_stream)\}/g,(_,key)=>values[key]||'').replace(/\n{3,}/g,'\n\n').trim().slice(0,1950);
 }
-const confirmationButtons=streamId=>new ActionRowBuilder().addComponents(
+const confirmationButtons=(streamId, allowEditing=true)=>new ActionRowBuilder().addComponents(
  new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:yes`).setLabel('Yes, I’m streaming').setStyle(ButtonStyle.Success),
- new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:no`).setLabel('No, cancel it').setStyle(ButtonStyle.Secondary)
+ new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:no`).setLabel('No, cancel it').setStyle(ButtonStyle.Secondary),
+ ...(allowEditing?[
+  new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:edit-yes`).setLabel('Edit & confirm').setStyle(ButtonStyle.Primary),
+  new ButtonBuilder().setCustomId(`stream-confirm:${streamId}:edit-no`).setLabel('Edit & cancel').setStyle(ButtonStyle.Secondary)
+ ]:[])
 );
 
 async function processStreamConfirmations(){
@@ -76,7 +80,7 @@ async function processStreamConfirmations(){
    if(claimError){if(claimError.code!=='23505')console.error('[stream-confirmations]',claimError.message);continue}
    try{
     const user=await client.users.fetch(discordId);
-    const when=discordTimestamp(stream.due),details=streamDetails(stream.note),game=details.game?` playing **${details.game}**`:'',message=await user.send({content:`Hi ${user.displayName}! Your **${stream.title}** stream${game} on ${streamDestination(details)} is scheduled for <t:${when}:F> (<t:${when}:R>).\n\nYour ${leadMinutes}-minute check-in is here. Are you still going live?`,allowedMentions:{parse:[]},components:[confirmationButtons(stream.id)]});
+    const when=discordTimestamp(stream.due),details=streamDetails(stream.note),game=details.game?` playing **${details.game}**`:'',message=await user.send({content:`Hi ${user.displayName}! Your **${stream.title}** stream${game} on ${streamDestination(details)} is scheduled for <t:${when}:F> (<t:${when}:R>).\n\nYour ${leadMinutes}-minute check-in is here. Are you still going live?`,allowedMentions:{parse:[]},components:[confirmationButtons(stream.id,config.post_to_discord!==false)]});
     await supabase.from('stream_confirmation_runs').update({status:'pending',dm_message_id:message.id,sent_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('stream_id',stream.id);
     console.log(`[stream-confirmation] Asked ${user.tag} about ${stream.title}.`);
    }catch(error){
@@ -90,25 +94,53 @@ async function processStreamConfirmations(){
 }
 
 async function handleStreamConfirmation(interaction){
- if(!interaction.isButton()||!interaction.customId.startsWith('stream-confirm:'))return;
- const [,streamId,answer]=interaction.customId.split(':');if(!streamId||!['yes','no'].includes(answer))return;
+ const isEdit=interaction.isModalSubmit()&&interaction.isFromMessage();
+ if(!(interaction.isButton()||isEdit)||!interaction.customId.startsWith('stream-confirm:'))return;
+ const [,streamId,action]=interaction.customId.split(':');
+ if(!streamId||!['yes','no','edit-yes','edit-no'].includes(action))return;
+ const openingEditor=interaction.isButton()&&action.startsWith('edit-');
+ const status=action.endsWith('yes')?'confirmed':'cancelled';
+ const editedContent=isEdit?interaction.fields.getTextInputValue('announcement').trim():null;
+ if(isEdit&&!editedContent){await interaction.reply({content:'Enter a message before sending your answer.'});return}
+ if(!openingEditor)await interaction.deferUpdate();
  const {data:run,error:runError}=await supabase.from('stream_confirmation_runs').select('*').eq('stream_id',streamId).eq('discord_user_id',interaction.user.id).maybeSingle();
- if(runError||!run||run.dm_message_id!==interaction.message.id){await interaction.reply({content:'I could not match this confirmation to your schedule.',ephemeral:true}).catch(()=>{});return}
- if(run.status!=='pending'){await interaction.update({content:interaction.message.content+'\n\nThis stream has already been answered.',components:[]}).catch(()=>{});return}
- await interaction.deferUpdate().catch(()=>{});
- const status=answer==='yes'?'confirmed':'cancelled',respondedAt=new Date().toISOString();
- const {data:updated,error:updateError}=await supabase.from('stream_confirmation_runs').update({status:'claiming',updated_at:respondedAt}).eq('id',run.id).eq('status','pending').select('id').maybeSingle();
- if(updateError||!updated){await interaction.editReply({content:`${interaction.message.content}\n\nThat answer was already received.`,components:[]}).catch(()=>{});return}
+ if(runError||!run||run.dm_message_id!==interaction.message.id){
+  const content='I could not match this confirmation to your schedule.';
+  if(openingEditor)await interaction.reply({content});else await interaction.followUp({content});
+  return;
+ }
+ if(run.status!=='pending'){
+  const content='This stream has already been answered or is being processed.';
+  if(openingEditor)await interaction.reply({content});else await interaction.followUp({content});
+  return;
+ }
  const [{data:stream},{data:config}]=await Promise.all([
   supabase.from('companion_items').select('title,note,due').eq('id',streamId).eq('user_id',run.user_id).eq('kind','crew-stream').maybeSingle(),
   supabase.from('stream_confirmation_settings').select('*').eq('user_id',run.user_id).maybeSingle()
  ]);
- if(!stream||!config){await supabase.from('stream_confirmation_runs').update({status:'pending',updated_at:new Date().toISOString()}).eq('id',run.id);await interaction.editReply({content:`${interaction.message.content}\n\n**I saved your click, but I could not find the schedule settings. Please try again.**`,components:[confirmationButtons(streamId)]}).catch(()=>{});return}
- const {data:nextStream}=await supabase.from('companion_items').select('title,due').eq('user_id',run.user_id).eq('kind','crew-stream').eq('done',false).gt('due',stream.due).order('due',{ascending:true}).limit(1).maybeSingle();
- const name=interaction.user.globalName||interaction.user.username,when=discordTimestamp(stream.due),details=streamDetails(stream.note);
- const content=status==='confirmed'
-  ?renderConfirmationMessage(config.message_template,stream,details,config)
-  :renderConfirmationMessage(config.cancel_message_template||defaultCancellationMessage,stream,details,config,nextStream);
+ if(!stream||!config){
+  const content='I couldn’t find your schedule settings. Please try again.';
+  if(openingEditor)await interaction.reply({content});else await interaction.followUp({content});
+  return;
+ }
+ const canPost=config.post_to_discord!==false;
+ const details=streamDetails(stream.note);
+ const nextStream=status==='cancelled'&&editedContent===null?(await supabase.from('companion_items').select('title,due').eq('user_id',run.user_id).eq('kind','crew-stream').eq('done',false).gt('due',stream.due).order('due',{ascending:true}).limit(1).maybeSingle()).data:null;
+ const template=status==='confirmed'?config.message_template:config.cancel_message_template||defaultCancellationMessage;
+ const content=editedContent??renderConfirmationMessage(template,stream,details,config,nextStream);
+ if(openingEditor){
+  if(!canPost){await interaction.reply({content:'Discord posting is off for this schedule.'});return}
+  const input=new TextInputBuilder().setCustomId('announcement').setLabel('Discord announcement for this stream').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(2000);
+  if(content)input.setValue(content);
+  const modal=new ModalBuilder().setCustomId(interaction.customId).setTitle(status==='confirmed'?'Edit and send confirmation':'Edit and send cancellation').addComponents(new ActionRowBuilder().addComponents(input));
+  await interaction.showModal(modal);
+  return;
+ }
+ if(isEdit&&!canPost){await interaction.followUp({content:'Discord posting is off. Use the original buttons to answer privately.'});return}
+ const respondedAt=new Date().toISOString();
+ const {data:updated,error:updateError}=await supabase.from('stream_confirmation_runs').update({status:'claiming',updated_at:respondedAt}).eq('id',run.id).eq('status','pending').select('id').maybeSingle();
+ if(updateError||!updated){await interaction.followUp({content:'That answer could not be saved. If it’s still pending, try again.'});return}
+ const name=interaction.user.globalName||interaction.user.username;
  if(config.post_to_discord===false){await supabase.from('stream_confirmation_runs').update({status,responded_at:respondedAt,updated_at:new Date().toISOString()}).eq('id',run.id);const resultText=status==='confirmed'?'Perfect — you’re confirmed. I’ll keep this one private.':'Got it — I’ve marked this stream as cancelled and won’t post it in the server.';await interaction.editReply({content:`${interaction.message.content}\n\n**${resultText}**`,components:[]}).catch(()=>{});return}
  try{
   const guild=client.guilds.cache.get(config.guild_id);
@@ -118,7 +150,16 @@ async function handleStreamConfirmation(interaction){
   if(!author?.permissions.has(PermissionFlagsBits.ManageGuild))throw new Error('The connected account must manage the selected Discord server.');
   const channel=await guild.channels.fetch(config.channel_id).catch(()=>null);
   if(channel?.guildId!==guild.id||!channel.isTextBased())throw new Error('Choose a channel in the selected Discord server.');
-  const message=await client.rest.post(Routes.channelMessages(config.channel_id),{body:{content,allowed_mentions:{parse:[],roles:config.role_id?[config.role_id]:[]}}});
+  const bannerId=status==='confirmed'?config.reminder_banner_id:config.cancellation_banner_id;
+  const files=[];
+  if(bannerId){
+   const {data:banner,error:bannerError}=await supabase.from('discord_banners').select('storage_path,file_name,mime_type').eq('id',bannerId).eq('user_id',run.user_id).maybeSingle();
+   if(bannerError||!banner)throw new Error('The schedule banner is unavailable. Replace or remove it in Schedule settings.');
+   const {data:file,error:fileError}=await supabase.storage.from('discord-banners').download(banner.storage_path);
+   if(fileError||!file)throw new Error('The schedule banner could not be loaded. Please try again.');
+   files.push({data:Buffer.from(await file.arrayBuffer()),name:banner.file_name,contentType:banner.mime_type});
+  }
+  const message=await client.rest.post(Routes.channelMessages(config.channel_id),{body:{content,allowed_mentions:{parse:[],roles:config.role_id?[config.role_id]:[]}},files});
   if(!message?.id)throw new Error('Discord did not return a message ID.');
   await supabase.from('stream_confirmation_runs').update({status,responded_at:respondedAt,announcement_message_id:message.id,updated_at:new Date().toISOString()}).eq('id',run.id);
   const resultText=status==='confirmed'?'Perfect — you’re confirmed. I’ve let the server know.':'Got it — I’ve marked this stream as cancelled and let the server know.';
@@ -618,7 +659,7 @@ client.on(Events.PresenceUpdate,(oldPresence,newPresence)=>{
 });
 client.on(Events.MessageReactionAdd,(reaction,user)=>void handleReaction(reaction,user,true));
 client.on(Events.MessageReactionRemove,(reaction,user)=>void handleReaction(reaction,user,false));
-client.on(Events.InteractionCreate,interaction=>void handleStreamConfirmation(interaction));
+client.on(Events.InteractionCreate,interaction=>void handleStreamConfirmation(interaction).catch(error=>console.error('[stream-confirmation-interaction]',error)));
 
 client.once(Events.ClientReady,async ready=>{console.log(`[ready] ${ready.user.tag} is online.`);await Promise.all([...ready.guilds.cache.values()].map(async guild=>{await syncGuild(guild);await logActivity(guild.id,'bot_online','info','B.E.I.P.I. came online','The Discord worker connected successfully.') }));await loadSettings();await reconcileAll();await reconcileRecordedLiveSessions();await processStreamConfirmations();setInterval(()=>void loadSettings(),60000).unref();setInterval(()=>void processStreamConfirmations(),60000).unref();setInterval(()=>void reconcileAll(),30000).unref();setInterval(()=>void reconcileRecordedLiveSessions(),30000).unref();setInterval(()=>void Promise.all([...client.guilds.cache.values()].map(guild=>syncGuild(guild))),300000).unref()});
 client.on(Events.GuildCreate,guild=>void (async()=>{await syncGuild(guild);await logActivity(guild.id,'bot_joined','info','B.E.I.P.I. joined the server','The bot installation was registered.')})());

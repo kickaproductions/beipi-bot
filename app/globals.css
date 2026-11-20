@@ -1296,6 +1296,9 @@ input::placeholder,textarea::placeholder{opacity:1;color:#756c83}.dark-theme inp
 .crew-schedule-header-actions{display:flex;align-items:center;gap:8px}
 .crew-schedule-settings-view{width:100%;max-width:800px}
 
-.schedule-settings-section{display:grid;gap:14px}
-.schedule-settings-section + .schedule-settings-section{border-top:1px solid var(--line);padding-top:16px}
-.schedule-settings-section h3{margin:0;font-size:.95rem}
+.schedule-settings-section{border:1px solid var(--line);border-radius:10px}
+.schedule-settings-section h3{display:flex;align-items:center;gap:8px;margin:0;font-size:.95rem}
+.schedule-settings-content{display:grid;gap:14px;padding:16px}
+.schedule-message-editor{display:grid;gap:10px}
+.schedule-message-editor > button{justify-self:start}
+.schedule-message-editor .preview-banner{margin-bottom:12px}
